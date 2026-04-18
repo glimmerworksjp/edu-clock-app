@@ -53,8 +53,9 @@ const SettingsPanel: Component = () => {
 
   onCleanup(stopRewind);
 
+  // タブレット以上(md: >= 768px)では少し大きめ
   const btnClass =
-    "px-3 py-1.5 rounded-full text-[11px] font-bold shadow-md active:scale-90 transition-all bg-white/80 backdrop-blur-sm text-gray-700";
+    "px-3 py-1.5 md:px-4 md:py-2 rounded-full text-[11px] md:text-[13px] font-bold shadow-md active:scale-90 transition-all bg-white/80 backdrop-blur-sm text-gray-700";
 
   return (
     <>
