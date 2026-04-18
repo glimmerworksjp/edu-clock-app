@@ -32,9 +32,34 @@ export const ClockLayout: Component = () => {
   }));
 
   return (
-    <div class="w-full h-full flex flex-col overflow-hidden relative">
-      {/* 秒バー：存在感は最小限 */}
-      <SecondsBar seconds={time().seconds} hours={time().hours} />
+    <div class="w-full h-full overflow-hidden relative">
+      {/* 時計を画面いっぱいに！六隅のUIは全部floatでStack */}
+      <div class={"absolute inset-0 flex items-stretch " + (isLandscape() ? "flex-row" : "flex-col")}>
+        {/* AM */}
+        <div class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0">
+          <AnalogClock
+            period="am"
+            hours={amTime().hours}
+            minutes={amTime().minutes}
+            dimmed={!isAm()}
+          />
+        </div>
+
+        {/* PM */}
+        <div class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0">
+          <AnalogClock
+            period="pm"
+            hours={pmTime().hours}
+            minutes={pmTime().minutes}
+            dimmed={isAm()}
+          />
+        </div>
+      </div>
+
+      {/* 秒バー：トップに浮かせる */}
+      <div class="absolute top-0 left-0 right-0 z-10 pointer-events-none">
+        <SecondsBar seconds={time().seconds} hours={time().hours} />
+      </div>
 
       {/* 現在のAM/PM表示（押してる間だけ反対側プレビュー）: ポートレート=左センター, ランドスケープ=上センター */}
       <div
@@ -55,29 +80,6 @@ export const ClockLayout: Component = () => {
         onPointerCancel={clearHold}
       >
         {isAm() ? "\u2600\uFE0F AM" : "\u{1F319} PM"}
-      </div>
-
-      {/* 時計を画面いっぱいに！paddingもgapも最小！ */}
-      <div class={"flex-1 flex items-stretch min-h-0 " + (isLandscape() ? "flex-row" : "flex-col")}>
-        {/* AM */}
-        <div class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0">
-          <AnalogClock
-            period="am"
-            hours={amTime().hours}
-            minutes={amTime().minutes}
-            dimmed={!isAm()}
-          />
-        </div>
-
-        {/* PM */}
-        <div class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0">
-          <AnalogClock
-            period="pm"
-            hours={pmTime().hours}
-            minutes={pmTime().minutes}
-            dimmed={isAm()}
-          />
-        </div>
       </div>
 
       <SettingsPanel />
