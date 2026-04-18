@@ -6,4 +6,6 @@ import App from "./App";
 const root = document.getElementById("root");
 if (!root) throw new Error("Root element not found");
 
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+
 render(() => <App />, root);
