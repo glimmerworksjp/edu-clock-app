@@ -234,45 +234,33 @@ const AnalogClock: Component<AnalogClockProps> = (props) => {
           }}
         </For>
 
+        {/*
+          時針・分針: g transform=rotate() で回す。
+          針自体は east(0°) を指す水平線として描画し、グループの transform 属性だけ更新する。
+          これでブラウザは針のジオメトリを再計算せず、合成層の変換として扱える。
+        */}
+
         {/* 時針 */}
-        <line
-          x1={CX - 12 * Math.cos((hourAngle() * Math.PI) / 180)}
-          y1={CY - 12 * Math.sin((hourAngle() * Math.PI) / 180)}
-          x2={CX + (R() * 0.5) * Math.cos((hourAngle() * Math.PI) / 180)}
-          y2={CY + (R() * 0.5) * Math.sin((hourAngle() * Math.PI) / 180)}
-          stroke="#ffffff"
-          stroke-width="10"
-          stroke-linecap="round"
-        />
-        <line
-          x1={CX - 10 * Math.cos((hourAngle() * Math.PI) / 180)}
-          y1={CY - 10 * Math.sin((hourAngle() * Math.PI) / 180)}
-          x2={CX + (R() * 0.48) * Math.cos((hourAngle() * Math.PI) / 180)}
-          y2={CY + (R() * 0.48) * Math.sin((hourAngle() * Math.PI) / 180)}
-          stroke="#111111"
-          stroke-width="7"
-          stroke-linecap="round"
-        />
+        <g
+          transform={`rotate(${hourAngle() + 90} ${CX} ${CY})`}
+          style="will-change: transform"
+        >
+          <line x1={CX} y1={CY + 12} x2={CX} y2={CY - R() * 0.5}
+            stroke="#ffffff" stroke-width="10" stroke-linecap="round" />
+          <line x1={CX} y1={CY + 10} x2={CX} y2={CY - R() * 0.48}
+            stroke="#111111" stroke-width="7" stroke-linecap="round" />
+        </g>
 
         {/* 分針 */}
-        <line
-          x1={CX - 15 * Math.cos((minuteAngle() * Math.PI) / 180)}
-          y1={CY - 15 * Math.sin((minuteAngle() * Math.PI) / 180)}
-          x2={minuteHandX2()}
-          y2={minuteHandY2()}
-          stroke="#ffffff"
-          stroke-width="6"
-          stroke-linecap="round"
-        />
-        <line
-          x1={CX - 13 * Math.cos((minuteAngle() * Math.PI) / 180)}
-          y1={CY - 13 * Math.sin((minuteAngle() * Math.PI) / 180)}
-          x2={CX + (R() * 0.76) * Math.cos((minuteAngle() * Math.PI) / 180)}
-          y2={CY + (R() * 0.76) * Math.sin((minuteAngle() * Math.PI) / 180)}
-          stroke="#111111"
-          stroke-width="3.5"
-          stroke-linecap="round"
-        />
+        <g
+          transform={`rotate(${minuteAngle() + 90} ${CX} ${CY})`}
+          style="will-change: transform"
+        >
+          <line x1={CX} y1={CY + 15} x2={CX} y2={CY - R() * 0.78}
+            stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
+          <line x1={CX} y1={CY + 13} x2={CX} y2={CY - R() * 0.76}
+            stroke="#111111" stroke-width="3.5" stroke-linecap="round" />
+        </g>
 
         {/* 中心ネジ */}
         <circle cx={CX} cy={CY} r="7" fill="white" />

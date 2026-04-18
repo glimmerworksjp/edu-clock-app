@@ -198,24 +198,28 @@ export const ClockLayout: Component = () => {
         onPointerUp={onDragEnd}
         onPointerCancel={onDragEnd}
       >
-        {/* AM */}
+        {/* AM（ドラッグ中は裏時計を描画しない=重い opacity レイヤーも消える） */}
         <div ref={amWrapperRef} class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0">
-          <AnalogClock
-            period="am"
-            hours={amTime().hours}
-            minutes={amTime().minutes}
-            dimmed={!isAm()}
-          />
+          <Show when={isAm() || !dragging()}>
+            <AnalogClock
+              period="am"
+              hours={amTime().hours}
+              minutes={amTime().minutes}
+              dimmed={!isAm()}
+            />
+          </Show>
         </div>
 
         {/* PM */}
         <div ref={pmWrapperRef} class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0">
-          <AnalogClock
-            period="pm"
-            hours={pmTime().hours}
-            minutes={pmTime().minutes}
-            dimmed={isAm()}
-          />
+          <Show when={!isAm() || !dragging()}>
+            <AnalogClock
+              period="pm"
+              hours={pmTime().hours}
+              minutes={pmTime().minutes}
+              dimmed={isAm()}
+            />
+          </Show>
         </div>
       </div>
 
