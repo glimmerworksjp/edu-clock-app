@@ -2,8 +2,14 @@ import { For, Show, createMemo } from "solid-js";
 import type { Component } from "solid-js";
 
 /**
- * 手回しモード時の空背景。時間帯に応じてグラデーション・太陽/月・星を描く。
+ * 自由回転モード時の空背景。時間帯に応じてグラデーション・太陽/月・星を描く。
  * 太陽は朝6時〜夕方18時、月は夕方18時〜朝6時に上空を弧状に移動する。
+ *
+ * パフォーマンス指針:
+ * - 位置は left/top ではなく transform: translate で動かす（GPUコンポジットのみ）
+ * - drop-shadow / box-shadow は使わない（毎フレームGPU再計算で重い）
+ * - 背景グラデーションは2分刻みに量子化して repaint 頻度を抑える
+ * - 星は常時アニメだが数を絞る
  */
 
 interface SkyColor {
@@ -71,7 +77,6 @@ function sunPosition(totalMinutes: number): { visible: boolean; xPct: number; yP
   const progress = (totalMinutes - 360) / 720;
   if (progress < 0 || progress > 1) return { visible: false, xPct: 0, yPct: 0 };
   const xPct = progress * 100;
-  // 上半分を弧で移動。y=50%が地平、y=5%が天頂。
   const arcHeight = 45; // %
   const yPct = 50 - Math.sin(progress * Math.PI) * arcHeight;
   return { visible: true, xPct, yPct };
@@ -88,9 +93,7 @@ function moonPosition(totalMinutes: number): { visible: boolean; xPct: number; y
   return { visible: true, xPct, yPct };
 }
 
-/** 夜の深さ: 太陽が地平下にいるほど強い。0〜1 */
 function nightness(totalMinutes: number): number {
-  // 20時〜4時 をピーク、18〜19時 / 5〜6時 でフェード
   const h = totalMinutes / 60;
   if (h >= 20 || h < 4) return 1;
   if (h >= 18 && h < 20) return (h - 18) / 2;
@@ -98,16 +101,16 @@ function nightness(totalMinutes: number): number {
   return 0;
 }
 
-// 一度だけ固定生成する星（乱数）
+// 星は30個に絞る（常時アニメなのでコンポジット負荷を軽く）
 interface Star {
   xPct: number;
   yPct: number;
   r: number;
   delay: number;
 }
-const STARS: Star[] = Array.from({ length: 60 }, () => ({
+const STARS: Star[] = Array.from({ length: 30 }, () => ({
   xPct: Math.random() * 100,
-  yPct: Math.random() * 55, // 上半分中心
+  yPct: Math.random() * 55,
   r: 0.6 + Math.random() * 1.4,
   delay: Math.random() * 3,
 }));
@@ -118,10 +121,13 @@ interface SkyBackgroundProps {
 }
 
 const SkyBackground: Component<SkyBackgroundProps> = (props) => {
-  const sky = createMemo(() => skyAtMinute(props.totalMinutes));
+  // 空グラデーションは2分刻みに量子化（目で差がわからない粒度で repaint 頻度を下げる）
+  const quantizedMin = createMemo(() => Math.floor(props.totalMinutes / 2) * 2);
+  const sky = createMemo(() => skyAtMinute(quantizedMin()));
   const sun = createMemo(() => sunPosition(props.totalMinutes));
   const moon = createMemo(() => moonPosition(props.totalMinutes));
-  const starOp = createMemo(() => Math.max(0, nightness(props.totalMinutes) - 0.3) * 1.4);
+  const starOp = createMemo(() => Math.max(0, nightness(quantizedMin()) - 0.3) * 1.4);
+  const starsVisible = createMemo(() => starOp() > 0.01);
 
   return (
     <div
@@ -130,42 +136,45 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
         background: `linear-gradient(180deg, ${sky().top} 0%, ${sky().bottom} 100%)`,
       }}
     >
-      {/* 星（夜のみ） */}
-      <div
-        class="absolute inset-0"
-        style={{ opacity: starOp(), transition: "opacity 0.8s ease" }}
-      >
-        <For each={STARS}>
-          {(s) => (
-            <div
-              class="absolute rounded-full bg-white"
-              style={{
-                left: `${s.xPct}%`,
-                top: `${s.yPct}%`,
-                width: `${s.r * 2}px`,
-                height: `${s.r * 2}px`,
-                animation: `twinkle 3s ease-in-out ${s.delay}s infinite`,
-              }}
-            />
-          )}
-        </For>
-      </div>
+      {/* 星（夜のみ。不要な時は DOM ごと外す） */}
+      <Show when={starsVisible()}>
+        <div
+          class="absolute inset-0"
+          style={{ opacity: starOp(), transition: "opacity 0.8s ease" }}
+        >
+          <For each={STARS}>
+            {(s) => (
+              <div
+                class="absolute rounded-full bg-white"
+                style={{
+                  left: `${s.xPct}%`,
+                  top: `${s.yPct}%`,
+                  width: `${s.r * 2}px`,
+                  height: `${s.r * 2}px`,
+                  animation: `twinkle 3s ease-in-out ${s.delay}s infinite`,
+                  "will-change": "opacity",
+                }}
+              />
+            )}
+          </For>
+        </div>
+      </Show>
 
-      {/* 太陽（放射状の光線＋にっこり顔） */}
+      {/* 太陽（transform で位置、drop-shadow は使わない） */}
       <Show when={sun().visible}>
         <div
-          class="absolute"
+          class="absolute top-0 left-0"
           style={{
-            left: `${sun().xPct}%`,
-            top: `${sun().yPct}%`,
-            transform: "translate(-50%, -50%)",
             width: "120px",
             height: "120px",
-            filter: "drop-shadow(0 0 24px #ffd06080)",
+            transform: `translate(calc(${sun().xPct}vw - 50%), calc(${sun().yPct}vh - 50%))`,
+            "will-change": "transform",
           }}
         >
           <svg viewBox="-60 -60 120 120" class="w-full h-full">
-            {/* 光線（12本） */}
+            {/* 光線（12本、外側のグロー用ディスク込みで光彩代わり） */}
+            <circle cx="0" cy="0" r="54" fill="#FFE880" opacity="0.25" />
+            <circle cx="0" cy="0" r="44" fill="#FFE060" opacity="0.35" />
             <g stroke="#FFB020" stroke-width="4" stroke-linecap="round">
               <For each={Array.from({ length: 12 })}>
                 {(_, i) => {
@@ -197,17 +206,15 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
         </div>
       </Show>
 
-      {/* 月（三日月＋にっこり顔） */}
+      {/* 月（三日月、transform で位置） */}
       <Show when={moon().visible}>
         <div
-          class="absolute"
+          class="absolute top-0 left-0"
           style={{
-            left: `${moon().xPct}%`,
-            top: `${moon().yPct}%`,
-            transform: "translate(-50%, -50%)",
             width: "84px",
             height: "84px",
-            filter: "drop-shadow(0 0 16px #fff8c880)",
+            transform: `translate(calc(${moon().xPct}vw - 50%), calc(${moon().yPct}vh - 50%))`,
+            "will-change": "transform",
           }}
         >
           <svg viewBox="-42 -42 84 84" class="w-full h-full">
@@ -219,13 +226,12 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
                 <circle cx="14" cy="-8" r="28" fill="black" />
               </mask>
             </defs>
+            {/* 光彩代わりの透明ディスク */}
+            <circle cx="0" cy="0" r="40" fill="#FFF5C8" opacity="0.12" />
             {/* 月本体（三日月） */}
             <g mask="url(#crescent-mask)">
               <circle cx="0" cy="0" r="32" fill="#FFF5C8" />
               <circle cx="0" cy="0" r="32" fill="#FFE88A" opacity="0.5" />
-            </g>
-            {/* 輪郭（三日月の内外にほんのり） */}
-            <g mask="url(#crescent-mask)">
               <circle cx="0" cy="0" r="31" fill="none" stroke="#E8C060" stroke-width="1.2" />
             </g>
             {/* 顔（三日月の左側の"太い部分"に配置） */}

@@ -67,10 +67,27 @@ export const ClockLayout: Component = () => {
     minutes: displayed().minutes,
   }));
 
-  // ===== 自由回転ドラッグ =====
+  // ===== 自由回転ドラッグ（rAF throttle で低性能端末でも滑らかに） =====
   let amWrapperRef: HTMLDivElement | undefined;
   let pmWrapperRef: HTMLDivElement | undefined;
-  const [drag, setDrag] = createSignal<DragState | null>(null);
+  // dragRef は高頻度 pointermove で書き換わる。signal にせず直接 mutate して allocation 抑える
+  let dragRef: DragState | null = null;
+  const [dragging, setDragging] = createSignal(false);
+  let pendingMinutes: number | null = null;
+  let rafId: number | null = null;
+
+  const commitPending = () => {
+    rafId = null;
+    if (pendingMinutes !== null) {
+      setRotateMinutes(pendingMinutes);
+      pendingMinutes = null;
+    }
+  };
+
+  const schedule = (m: number) => {
+    pendingMinutes = m;
+    if (rafId === null) rafId = requestAnimationFrame(commitPending);
+  };
 
   const nearestClockCenter = (clientX: number, clientY: number): { cx: number; cy: number } | null => {
     const refs = [amWrapperRef, pmWrapperRef].filter(Boolean) as HTMLDivElement[];
@@ -93,7 +110,7 @@ export const ClockLayout: Component = () => {
       const pivot = nearestClockCenter(e.clientX, e.clientY);
       if (!pivot) return;
       const a = (Math.atan2(e.clientY - pivot.cy, e.clientX - pivot.cx) * 180) / Math.PI;
-      setDrag({
+      dragRef = {
         style: "crank",
         pivotX: pivot.cx,
         pivotY: pivot.cy,
@@ -102,49 +119,65 @@ export const ClockLayout: Component = () => {
         maxAngle: 0,
         startMinutes: rotate.minutes,
         pointerId: e.pointerId,
-      });
+      };
     } else {
-      setDrag({
+      dragRef = {
         style: "drag",
         lastX: e.clientX,
         lastY: e.clientY,
         cumPixels: 0,
         startMinutes: rotate.minutes,
         pointerId: e.pointerId,
-      });
+      };
     }
+    setDragging(true);
   };
 
   const onDragMove = (e: PointerEvent) => {
-    const s = drag();
+    const s = dragRef;
     if (!s || e.pointerId !== s.pointerId) return;
     if (s.style === "crank") {
       const a = (Math.atan2(e.clientY - s.pivotY, e.clientX - s.pivotX) * 180) / Math.PI;
       let delta = a - s.lastAngle;
       while (delta > 180) delta -= 360;
       while (delta < -180) delta += 360;
-      const nextCum = s.cumulative + delta;
-      const nextMax = Math.max(s.maxAngle, nextCum);
-      setDrag({ ...s, lastAngle: a, cumulative: nextCum, maxAngle: nextMax });
-      if (nextMax > s.maxAngle) {
-        setRotateMinutes(s.startMinutes + nextMax / 6);
+      s.cumulative += delta;
+      s.lastAngle = a;
+      if (s.cumulative > s.maxAngle) {
+        s.maxAngle = s.cumulative;
+        schedule(s.startMinutes + s.maxAngle / 6);
       }
     } else {
       const dx = e.clientX - s.lastX;
       const dy = e.clientY - s.lastY;
-      const nextCum = s.cumPixels + Math.hypot(dx, dy);
-      setDrag({ ...s, lastX: e.clientX, lastY: e.clientY, cumPixels: nextCum });
-      setRotateMinutes(s.startMinutes + nextCum / PX_PER_MINUTE);
+      s.cumPixels += Math.hypot(dx, dy);
+      s.lastX = e.clientX;
+      s.lastY = e.clientY;
+      schedule(s.startMinutes + s.cumPixels / PX_PER_MINUTE);
     }
   };
 
   const onDragEnd = (e: PointerEvent) => {
-    const s = drag();
+    const s = dragRef;
     if (!s || e.pointerId !== s.pointerId) return;
     const el = e.currentTarget as HTMLElement;
     if (el.hasPointerCapture?.(e.pointerId)) el.releasePointerCapture(e.pointerId);
-    setDrag(null);
+    dragRef = null;
+    setDragging(false);
+    // 保留中の更新を即反映
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    if (pendingMinutes !== null) {
+      setRotateMinutes(pendingMinutes);
+      pendingMinutes = null;
+    }
   };
+
+  onCleanup(() => {
+    if (rafId !== null) cancelAnimationFrame(rafId);
+  });
 
   return (
     <div class="w-full h-full overflow-hidden relative">
@@ -158,7 +191,7 @@ export const ClockLayout: Component = () => {
         class={"absolute inset-0 flex items-stretch " + (isLandscape() ? "flex-row" : "flex-col")}
         style={{
           "touch-action": rotate.active ? "none" : "auto",
-          cursor: rotate.active ? (drag() ? "grabbing" : "grab") : "default",
+          cursor: rotate.active ? (dragging() ? "grabbing" : "grab") : "default",
         }}
         onPointerDown={onDragStart}
         onPointerMove={onDragMove}

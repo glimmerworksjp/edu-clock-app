@@ -90,17 +90,10 @@ const AnalogClock: Component<AnalogClockProps> = (props) => {
       style={{ opacity: props.dimmed ? 0.25 : 1, transition: "opacity 0.5s ease" }}
     >
       <svg viewBox={`0 0 ${VIEW} ${VIEW}`} class="w-full h-full" style="max-height: 100%; max-width: 100%;">
-        <defs>
-          <filter id={`shadow-${props.period}`}>
-            <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#00000030" />
-          </filter>
-        </defs>
-
-        {/* 外側リング（細め） */}
+        {/* 外側リング（細め。SVGフィルターは重いのでシンプルな同心円で縁取り） */}
         <circle
           cx={CX} cy={CY} r={OUTER_RING() + 2}
           fill={props.period === "am" ? "#0060B0" : "#C01850"}
-          filter={`url(#shadow-${props.period})`}
         />
         <circle
           cx={CX} cy={CY} r={OUTER_RING()}
