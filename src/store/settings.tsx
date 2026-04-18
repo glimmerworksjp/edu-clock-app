@@ -4,6 +4,7 @@ import {
   type ParentComponent,
 } from "solid-js";
 import { createStore } from "solid-js/store";
+import { DEFAULT_PALETTE_ID, getPalette, palettes } from "../colors";
 
 export type ColorMode = "sector" | "badge";
 export type TimeFormat = "24h" | "12h";
@@ -14,6 +15,7 @@ export interface Settings {
   timeFormat: TimeFormat;
   /** くわしく=外周に1-60の分表示, すっきり=非表示 */
   detailMode: DetailMode;
+  paletteId: string;
 }
 
 interface SettingsContextValue {
@@ -21,6 +23,8 @@ interface SettingsContextValue {
   setColorMode: (mode: ColorMode) => void;
   setTimeFormat: (format: TimeFormat) => void;
   setDetailMode: (mode: DetailMode) => void;
+  setPaletteId: (id: string) => void;
+  cyclePalette: () => void;
 }
 
 const STORAGE_KEY = "educlock-settings";
@@ -29,13 +33,19 @@ const defaultSettings: Settings = {
   colorMode: "sector",
   timeFormat: "24h",
   detailMode: "kuwashiku",
+  paletteId: DEFAULT_PALETTE_ID,
 };
 
 function loadSettings(): Settings {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
-      return { ...defaultSettings, ...JSON.parse(stored) };
+      const merged: Settings = { ...defaultSettings, ...JSON.parse(stored) };
+      // 保存されたpaletteIdが現存しない場合はデフォルトに戻す
+      if (!palettes.some((p) => p.id === merged.paletteId)) {
+        merged.paletteId = DEFAULT_PALETTE_ID;
+      }
+      return merged;
     }
   } catch {
     // ignore
@@ -71,6 +81,17 @@ export const SettingsProvider: ParentComponent = (props) => {
     setDetailMode(mode) {
       setSettings("detailMode", mode);
       saveSettings({ ...settings, detailMode: mode });
+    },
+    setPaletteId(id) {
+      const target = getPalette(id).id; // 存在しないIDはデフォルトに正規化
+      setSettings("paletteId", target);
+      saveSettings({ ...settings, paletteId: target });
+    },
+    cyclePalette() {
+      const idx = palettes.findIndex((p) => p.id === settings.paletteId);
+      const next = palettes[(idx + 1) % palettes.length]!.id;
+      setSettings("paletteId", next);
+      saveSettings({ ...settings, paletteId: next });
     },
   };
 

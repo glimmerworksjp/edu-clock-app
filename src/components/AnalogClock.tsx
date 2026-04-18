@@ -1,7 +1,7 @@
 import { For, Show, createMemo } from "solid-js";
 import type { Component } from "solid-js";
 import { useSettings } from "../store/settings";
-import { amColors, pmColors, type HourColor } from "../colors";
+import { getPalette, type HourColor } from "../colors";
 
 interface AnalogClockProps {
   period: "am" | "pm";
@@ -56,9 +56,10 @@ const AnalogClock: Component<AnalogClockProps> = (props) => {
   const OUTER_RING = () => R() + 3;
   const MINUTE_NUM_R = () => R() + 20;
 
-  const colors = createMemo((): HourColor[] =>
-    props.period === "am" ? amColors : pmColors,
-  );
+  const colors = createMemo((): HourColor[] => {
+    const palette = getPalette(settings.paletteId);
+    return props.period === "am" ? palette.am : palette.pm;
+  });
 
   const numbers = createMemo(() => {
     const is24h = settings.timeFormat === "24h";

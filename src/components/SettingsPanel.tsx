@@ -2,7 +2,7 @@ import type { Component } from "solid-js";
 import { useSettings } from "../store/settings";
 
 const SettingsPanel: Component = () => {
-  const { settings, setColorMode, setTimeFormat, setDetailMode } = useSettings();
+  const { settings, setColorMode, setTimeFormat, setDetailMode, cyclePalette } = useSettings();
 
   const toggleColorMode = () =>
     setColorMode(settings.colorMode === "sector" ? "badge" : "sector");
@@ -41,12 +41,20 @@ const SettingsPanel: Component = () => {
         {settings.detailMode === "kuwashiku" ? "すっきり" : "くわしく"}
       </button>
 
-      {/* 右下: おうぎ / すうじ */}
+      {/* 右下: くぎり / すうじ */}
       <button
         class={`fixed bottom-2 right-2 z-50 ${btnClass}`}
         onClick={toggleColorMode}
       >
-        {settings.colorMode === "sector" ? "すうじ" : "おうぎ"}
+        {settings.colorMode === "sector" ? "すうじ" : "くぎり"}
+      </button>
+
+      {/* べつのいろ: ポートレート=右センター, ランドスケープ=下センター */}
+      <button
+        class={`fixed z-50 right-2 top-1/2 -translate-y-1/2 landscape:right-auto landscape:top-auto landscape:translate-y-0 landscape:bottom-2 landscape:left-1/2 landscape:-translate-x-1/2 ${btnClass}`}
+        onClick={cyclePalette}
+      >
+        べつのいろ
       </button>
     </>
   );

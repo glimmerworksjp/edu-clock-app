@@ -21,17 +21,25 @@ export const ClockLayout: Component = () => {
   }));
 
   return (
-    <div class="w-full h-full flex flex-col overflow-hidden">
+    <div class="w-full h-full flex flex-col overflow-hidden relative">
       {/* 秒バー：存在感は最小限 */}
       <SecondsBar seconds={time().seconds} hours={time().hours} />
+
+      {/* 現在のAM/PM表示：ポートレートは左センター、ランドスケープは上センター */}
+      <div
+        class="absolute z-20 left-2 top-1/2 -translate-y-1/2 landscape:left-1/2 landscape:top-2 landscape:translate-y-0 landscape:-translate-x-1/2 px-3 py-1 rounded-full text-xs font-black shadow-md"
+        style={{
+          "background-color": isAm() ? "#0080D8" : "#E02068",
+          color: "#ffffff",
+        }}
+      >
+        {isAm() ? "\u2600\uFE0F AM" : "\u{1F319} PM"}
+      </div>
 
       {/* 時計を画面いっぱいに！paddingもgapも最小！ */}
       <div class="flex-1 flex flex-col landscape:flex-row items-stretch min-h-0">
         {/* AM */}
-        <div class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 relative">
-          <span class="absolute top-0 left-2 text-[10px] font-extrabold text-blue-500/60 z-10">
-            &#x2600;&#xFE0F; AM
-          </span>
+        <div class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0">
           <AnalogClock
             period="am"
             hours={amTime().hours}
@@ -41,10 +49,7 @@ export const ClockLayout: Component = () => {
         </div>
 
         {/* PM */}
-        <div class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 relative">
-          <span class="absolute top-0 left-2 text-[10px] font-extrabold text-pink-500/60 z-10">
-            &#x1F319; PM
-          </span>
+        <div class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0">
           <AnalogClock
             period="pm"
             hours={pmTime().hours}
