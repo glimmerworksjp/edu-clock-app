@@ -1,0 +1,20 @@
+{
+  "name": "educlock",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "solid-js": "^1.9.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "tailwindcss": "^4.2.2",
+    "vite": "^8.0.8",
+    "vite-plugin-pwa": "^1.2.0",
+    "vite-plugin-solid": "^2.11.12"
+  }
+}
