@@ -1,5 +1,6 @@
 import type { Component } from "solid-js";
 import { useSettings } from "../store/settings";
+import { getNextPalette } from "../colors";
 
 const SettingsPanel: Component = () => {
   const { settings, setColorMode, setTimeFormat, setDetailMode, cyclePalette } = useSettings();
@@ -49,12 +50,12 @@ const SettingsPanel: Component = () => {
         {settings.colorMode === "sector" ? "すうじ" : "くぎり"}
       </button>
 
-      {/* べつのいろ: ポートレート=右センター, ランドスケープ=下センター */}
+      {/* 次パレット名ボタン: ポートレート=右センター, ランドスケープ=下センター */}
       <button
         class={`fixed z-50 right-2 top-1/2 -translate-y-1/2 landscape:right-auto landscape:top-auto landscape:translate-y-0 landscape:bottom-2 landscape:left-1/2 landscape:-translate-x-1/2 ${btnClass}`}
         onClick={cyclePalette}
       >
-        べつのいろ
+        {getNextPalette(settings.paletteId).name}
       </button>
     </>
   );
