@@ -60,13 +60,10 @@ const AnalogClock: Component<AnalogClockProps> = (props) => {
     const palette = getPalette(settings.paletteId);
     if (props.period === "am") return palette.am;
     if (props.period === "pm") return palette.pm;
-    // merged: そらのいろ時のみ9〜20時の覚醒帯に差し替え（他パレットはAM=PMなのでamを流用）
+    // merged: 他パレットはAM=PMなので am を流用。
+    // そらのいろ (vivid) は AM/PM で配色が違うので、表示中の時刻で切り替える。
     if (palette.id !== "vivid") return palette.am;
-    // 上=12時(正午)から時計回りに13→20時、位置9〜11で9〜11時(朝)に戻る昼夜の弧。
-    // 12時間しか入らないので21時は省く（位置9は数字の"9"と一致する朝の青を優先）。
-    return Array.from({ length: 12 }, (_, i) =>
-      i <= 8 ? palette.pm[i]! : palette.am[i]!,
-    );
+    return props.hours < 12 ? palette.am : palette.pm;
   });
 
   const numbers = createMemo(() => {
