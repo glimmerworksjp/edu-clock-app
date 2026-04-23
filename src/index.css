@@ -18,8 +18,9 @@ html, body, #root {
    - -webkit-user-drag: ドラッグ選択 / 画像ドラッグを禁止
    - -webkit-user-modify: 「編集不可」を iOS に明示
    - -webkit-tap-highlight-color: タップ時のハイライトも消す
-   さらに ::selection を透明化して、万が一選択が発生しても視覚的に
-   分からないようにフォールバックも仕込む。*/
+   ::selection で背景を透明化するフォールバックは入れない — 見た目上
+   選択が見えないだけで実体としては選択されており、iOS の「Webで検索」
+   等の callout メニューは出てしまうため、解決したふりになるだけで悪手。*/
 *, *::before, *::after {
   user-select: none !important;
   -webkit-user-select: none !important;
@@ -27,15 +28,6 @@ html, body, #root {
   -webkit-user-drag: none !important;
   -webkit-user-modify: read-only !important;
   -webkit-tap-highlight-color: transparent !important;
-}
-
-::selection {
-  background: transparent !important;
-  color: inherit !important;
-}
-::-moz-selection {
-  background: transparent !important;
-  color: inherit !important;
 }
 
 /* やわらかグラデーション背景 */
