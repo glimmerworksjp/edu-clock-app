@@ -8,9 +8,17 @@ html, body, #root {
   height: 100%;
   overflow: hidden;
   font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS Safari では user-select: none を親に掛けても長押しで文字選択 / callout
+   メニュー (コピー/共有) が出るケースがあるため、全要素に強制する。
+   特に -webkit-touch-callout は user-select とは別系統で、これを none に
+   しないと iOS で画像リンクや任意要素に対し長押しで callout が開く。*/
+*, *::before, *::after {
   user-select: none;
   -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 /* やわらかグラデーション背景 */
