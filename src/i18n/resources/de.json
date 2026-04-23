@@ -6,16 +6,16 @@
     "kuwashiku": "genau",
     "sector": "tortenstück",
     "badge": "abzeichen",
-    "rotateEnter": "frei drehen",
+    "rotateEnter": "Freie Rotation",
     "rotateExit": "uhr",
     "mergeToSingle": "zusammen",
     "splitToTwo": "trennen",
     "rewindMinute": "1 min zurück",
     "styleToCrank": "kurbeln",
     "styleToDrag": "ziehen",
-    "autoStart": "auto dreht",
+    "autoStart": "Auto-Rotation",
     "autoStop": "auto stopp",
-    "random": "zufall"
+    "random": "Zufall"
   },
   "badge": {
     "am": "☀️ AM",
