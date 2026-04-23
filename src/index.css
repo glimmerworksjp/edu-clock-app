@@ -30,6 +30,14 @@ html, body, #root {
   -webkit-tap-highlight-color: transparent !important;
 }
 
+/* touch-action: manipulation は「パン/ピンチズーム以外の標準ジェスチャ
+   (ダブルタップズーム、長押し callout 等)を抑制」する指定。iOS で
+   -webkit-touch-callout: none が効かない環境でも、こちらで callout が
+   抑止できることがある。*/
+button, a, [role="button"] {
+  touch-action: manipulation;
+}
+
 /* やわらかグラデーション背景 */
 #root {
   background: linear-gradient(160deg, #fef6e4 0%, #fce4ec 35%, #e8eaf6 65%, #e0f7fa 100%);
