@@ -1,8 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- PWA インストールアイコン用。LP favicon の構図(青の時計 + 紫アーク + 両者の mask gap)
-       を LP サイトの地色 (#f8f0e8) でフルブリード塗りつぶした上に 1.2 倍で配置。
-       透明領域をゼロにすることで OS (Android Chrome PWA install 等) が
-       白 padding を足す挙動を防ぐ。-->
+  <!-- PWA インストールアイコン用。LP favicon の構図(青の時計 + 紫アーク + mask gap)
+       を LP サイトと同じベージュ地色 (#f8f0e8) のフルブリード上に等倍で配置。
+       LP 原本は composition が左オフセットで右に余白が寄っているので、
+       translate(47.5 0) で水平方向を canvas 中心に寄せる。
+       scale は掛けない(1.2 倍にすると Android の maskable safe zone から
+       青の左端と紫の右端がはみ出て欠けるため)。-->
   <rect width="512" height="512" fill="#f8f0e8"/>
 
   <defs>
@@ -12,8 +14,7 @@
     </mask>
   </defs>
 
-  <!-- LP 構図を 1.2 倍して canvas 中心に -->
-  <g transform="translate(256 256) scale(1.2) translate(-208.5 -256)">
+  <g transform="translate(47.5 0)">
     <circle cx="192" cy="256" r="190" fill="#3898e8"/>
     <circle cx="192" cy="256" r="164" fill="#ffffff"/>
     <g font-family="system-ui, -apple-system, 'Hiragino Maru Gothic ProN', sans-serif"
