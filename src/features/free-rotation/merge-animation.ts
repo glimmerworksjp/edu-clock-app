@@ -1,5 +1,5 @@
-import { createEffect, createMemo, createSignal, on, onCleanup, type Accessor } from "solid-js";
-import { rotateActive, rotateMerged } from "./state";
+import { createEffect, createSignal, on, onCleanup, type Accessor } from "solid-js";
+import { rotateActive, mergedVisible } from "./state";
 
 /**
  * かさね (merged) / わける (split) 切替時のトランジション支援。
@@ -9,20 +9,15 @@ import { rotateActive, rotateMerged } from "./state";
  *   - hook:        useButtonsDimmedDuringMergeFlip (SettingsPanel 専用)
  *   - 計算ヘルパー: amTransform, pmTransform, mergedTransform, splitShadow
  *
- * 「見た目として重ねになっているか」は rotateActive && rotateMerged で判定する
- * (通常モードでは merged フラグの値に関係なく普通の時計表示にしたいため)。
- *
- * transitioning フラグは 620ms (CSS の transition と同期) 立ち、
- * 切替アニメ中の "影→分身" 表現や周辺ボタンの dim 制御に使われる。
+ * mergedVisible 自体は state.ts が公開する accessor (rotateActive との AND ガード済み)。
+ * このモジュールはそれを観測して transitioning フラグを 620ms 立ち下げるだけ。
+ * transitioning は CSS の transition と同期して、切替アニメ中の "影→分身" 表現や
+ * 周辺ボタンの dim 制御に使われる。
  */
 
 const TRANSITION_DURATION_MS = 620;
 
 export const useMergeAnimation = () => {
-  // mergedVisible は「実際に merged 表示が見えているか」。rotateActive と rotateMerged の AND。
-  // この AND が「通常モードでは絶対に merged 表示にならない」モード階層上の排他性を担保する。
-  // (詳細なモード階層は features/free-rotation/state.ts の冒頭コメントを参照)
-  const mergedVisible = createMemo(() => rotateActive() && rotateMerged());
   const [transitioning, setTransitioning] = createSignal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -69,7 +64,8 @@ export const splitShadow = (transitioning: boolean): string =>
 
 /**
  * かさね/わけ切替時に他のボタンを薄く退避させたいケース用の hook。
- * (rotateActive 自体の切替時は無視する。merged 単独切替の時だけ立つ)
+ * mergedVisible の遷移を観測。ただし rotateActive 自体の出入りで mergedVisible が
+ * 動いた時 (= モード遷移そのもの) は無視し、純粋に「manual 中の merged トグル」だけで dim 起動。
  *
  * SettingsPanel 専用ヘルパー。
  */
@@ -80,7 +76,7 @@ export const useButtonsDimmedDuringMergeFlip = (): Accessor<boolean> => {
 
   createEffect(
     on(
-      rotateMerged,
+      mergedVisible,
       (_curr, prev) => {
         const currActive = rotateActive();
         const activeChanged = currActive !== prevActive;

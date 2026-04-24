@@ -4,31 +4,33 @@ import { createSignal } from "solid-js";
  * 自由回転モード (じゆうかいてん) のセッション状態。
  * 永続化しない (アプリ再起動で初期状態に戻る)。
  *
- * ===== モード階層 (このファイルが定義する全状態の関係) =====
+ * ===== モード階層 =====
  *
  *   通常モード (rotateActive() === false)
- *     現在時刻を表示。AM/PM バッジ + 長押しプレビューが出る。
- *     ※ rotateMerged は無意味 (mergedVisible が rotateActive と AND を取るため
- *        通常モードでは絶対に merged 表示にならない)
+ *     現在時刻を表示。AM/PM バッジ + 長押しプレビューが出る
  *
  *   自由回転モード (rotateActive() === true)
  *     ├─ manual サブモード (rotateMode() === "manual")
  *     │    ドラッグで時刻変更、1ふんもどす、ランダム、かさね/わけ切替
- *     │    rotateMerged: 重ね (1つの盤面) / わけ (AM/PM 別盤面)
- *     │                  ← ここでのみ意味を持つ
+ *     │    かさね (merged) / わける (split) は manual 中でのみ切替可
  *     │
  *     └─ auto サブモード (rotateMode() === "auto")
  *          1日24秒で自動進行
  *
+ * ===== 排他性は構造で強制している =====
+ * 「通常モードで merged 表示にならない」は AND ガードを書き忘れたら破綻する規約ではなく、
+ * **生 signal `rotateMerged` を module-private にして外に出さず、公開 accessor は
+ * AND ガード後の `mergedVisible` だけ、公開 action `toggleMerged` も rotateActive 中だけ動く**
+ * ことで構造的に保証している。コメントが嘘をつく余地はない。
+ *
  * Public API:
- *   - accessor: rotateActive, rotateMinutes, rotateMode, rotateMerged
+ *   - accessor: rotateActive, rotateMinutes, rotateMode, mergedVisible
  *   - action:   enterRotate, exitRotate, seekRotate, setRotateMode, toggleMerged
  *
- * 内部の生 setter (setActiveRaw, setMinutesRaw 等) は意図的に export していない。
- * モジュール内でも生 setter を直接呼ばず、必ず action 経由で書き換えること。
+ * 内部の生 setter (setActiveRaw, setMinutesRaw 等) と生 signal (rotateMerged) は
+ * 意図的に export していない。モジュール内でも生 setter を直接呼ばず、必ず action 経由で書き換える。
  *
  * 補足: rotateMinutes は 0..1439 に正規化される (seekRotate が wrap-around を担保)。
- *       生 setter を直接呼べる構造にすると、この invariant を壊せてしまう。
  */
 
 /** 自由回転のサブモード: manual=手動, auto=自動進行 (らんだむは単発アクションなのでここには無い) */
@@ -39,17 +41,21 @@ function nowAsMinutes(): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-// ===== Internal state (raw setters are intentionally not exported) =====
+// ===== Internal state (raw setters and rotateMerged signal are intentionally not exported) =====
 const [rotateActive, setActiveRaw] = createSignal(false);
 const [rotateMinutes, setMinutesRaw] = createSignal(nowAsMinutes());
 const [rotateMode, setModeRaw] = createSignal<RotateMode>("manual");
-// rotateActive のサブ状態。rotateActive() === false の間は意味を持たない
-// (mergedVisible が rotateActive() && rotateMerged() の AND を取るため、
-//  通常モードでは表示に反映されない)
 const [rotateMerged, setMergedRaw] = createSignal(true);
 
 // ===== Public accessors (read-only) =====
-export { rotateActive, rotateMinutes, rotateMode, rotateMerged };
+export { rotateActive, rotateMinutes, rotateMode };
+
+/**
+ * merged (かさね) 表示が実際に出ているか。rotateActive との AND を返す。
+ * 「通常モードで merged 表示にならない」排他性を構造的に担保するため、
+ * 外に露出する merged 関連 accessor はこの関数だけ。生 signal rotateMerged は private。
+ */
+export const mergedVisible = () => rotateActive() && rotateMerged();
 
 // ===== Public actions (only valid mutations live here) =====
 
@@ -81,4 +87,11 @@ export const seekRotate = (m: number) => {
 
 export const setRotateMode = (mode: RotateMode) => setModeRaw(mode);
 
-export const toggleMerged = () => setMergedRaw(v => !v);
+/**
+ * かさね/わけ を切替。rotateActive() === false の時は no-op。
+ * (通常モード中に merged 状態が動くと、復帰時の挙動が予期せず変わるため構造的に禁止)
+ */
+export const toggleMerged = () => {
+  if (!rotateActive()) return;
+  setMergedRaw(v => !v);
+};

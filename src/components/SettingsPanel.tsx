@@ -11,7 +11,7 @@ import { paletteId, cyclePalette } from "../features/settings/palette";
 import {
   rotateActive,
   rotateMode,
-  rotateMerged,
+  mergedVisible,
   enterRotate,
   exitRotate,
   setRotateMode,
@@ -70,7 +70,7 @@ const SettingsPanel: Component = () => {
           <button
             class={`fixed top-2 left-2 z-50 ${btnClass}`}
             onClick={toggleMerged}
-            aria-label={rotateMerged() ? t("settings.splitToTwo") : t("settings.mergeToSingle")}
+            aria-label={mergedVisible() ? t("settings.splitToTwo") : t("settings.mergeToSingle")}
           />
 
           {/* TODO: このスロット (横長分け=上センター, 横長重ね=右上 / 縦長分け=左センター, 縦長重ね=左下寄り)
@@ -87,10 +87,10 @@ const SettingsPanel: Component = () => {
             class={
               "fixed z-50 " +
               (isLandscape()
-                ? (rotateMerged()
+                ? (mergedVisible()
                     ? "left-[82%] top-[calc(100%-0.5rem)] -translate-x-1/2 -translate-y-full"
                     : "left-1/2 top-[calc(100%-0.5rem)] -translate-x-1/2 -translate-y-full")
-                : (rotateMerged()
+                : (mergedVisible()
                     ? "left-[calc(100%-0.5rem)] top-[80%] -translate-x-full -translate-y-1/2"
                     : "left-[calc(100%-0.5rem)] top-1/2 -translate-x-full -translate-y-1/2")) +
               " " + btnClass
