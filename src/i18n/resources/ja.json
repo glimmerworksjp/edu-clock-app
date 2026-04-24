@@ -15,7 +15,8 @@
     "styleToDrag": "ぐりぐり",
     "autoStart": "じどう",
     "autoStop": "すとっぷ",
-    "random": "らんだむ"
+    "random": "らんだむ",
+    "scheduleAdd": "よてい"
   },
   "badge": {
     "am": "☀️ AM",

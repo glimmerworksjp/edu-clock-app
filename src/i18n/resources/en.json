@@ -15,7 +15,8 @@
     "styleToDrag": "drag",
     "autoStart": "auto",
     "autoStop": "stop",
-    "random": "random"
+    "random": "random",
+    "scheduleAdd": "plan"
   },
   "badge": {
     "am": "☀️ AM",

@@ -21,12 +21,17 @@ import { useRewindHold } from "../features/free-rotation/rewind";
 import { randomizeRotate } from "../features/free-rotation/random-time";
 import { useButtonsDimmedDuringMergeFlip } from "../features/free-rotation/merge-animation";
 import { withViewTransition, MORPHING_SLOT } from "../features/view-transition";
+// ===== 予定モード ピッカー =====
+import { pickerOpen, openPicker, closePicker } from "../features/schedule/picker";
 
 const SettingsPanel: Component = () => {
   const { t } = useI18n();
   const isLandscape = useOrientation();
   const { start: startRewind, stop: stopRewind } = useRewindHold();
   const buttonsDimmed = useButtonsDimmedDuringMergeFlip();
+
+  // 予定 (よてい) ボタンの位置を ref で取り、タップ時にリングメニューの中心位置として渡す
+  let yoteiBtnRef: HTMLButtonElement | undefined;
 
   const toggleRotate = () =>
     withViewTransition(() => (rotateActive() ? exitRotate() : enterRotate()));
@@ -73,8 +78,41 @@ const SettingsPanel: Component = () => {
             aria-label={mergedVisible() ? t("settings.splitToTwo") : t("settings.mergeToSingle")}
           />
 
-          {/* TODO: このスロット (横長分け=上センター, 横長重ね=右上 / 縦長分け=左センター, 縦長重ね=左下寄り)
-              に「よてい」ボタンを追加予定 */}
+          {/* よてい (予定追加): 押すとリングメニューが出てプリセット絵文字を選べる
+              横長分け=上センター, 横長重ね=右上 / 縦長分け=左センター, 縦長重ね=左下寄り
+              MORPHING_SLOT.LEFT を AM/PM バッジ (通常モード) と共有 */}
+          <button
+            ref={(el) => { yoteiBtnRef = el; }}
+            class={
+              "fixed z-50 " +
+              (isLandscape()
+                ? (mergedVisible()
+                    ? "left-[82%] top-2 -translate-x-1/2"
+                    : "left-1/2 top-2 -translate-x-1/2")
+                : (mergedVisible()
+                    ? "left-2 top-[80%] -translate-y-1/2"
+                    : "left-2 top-1/2 -translate-y-1/2")) +
+              " " + btnClass
+            }
+            style={{
+              transition: moveTransition + ", " + dimTransition,
+              opacity: buttonsDimmed() ? 0.08 : 1,
+              "view-transition-name": MORPHING_SLOT.LEFT,
+            }}
+            onClick={() => {
+              if (pickerOpen()) {
+                closePicker();
+                return;
+              }
+              if (!yoteiBtnRef) return;
+              const rect = yoteiBtnRef.getBoundingClientRect();
+              openPicker({
+                x: rect.left + rect.width / 2,
+                y: rect.top + rect.height / 2,
+              });
+            }}
+            aria-label={t("settings.scheduleAdd")}
+          />
 
           {/* 1ふんもどす (自由回転 manual のみ)
               通常モードのパレット切替と MORPHING_SLOT.RIGHT を共有し、

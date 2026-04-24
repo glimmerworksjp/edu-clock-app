@@ -3,6 +3,7 @@ import type { Component } from "solid-js";
 import ClockFace from "./ClockFace";
 import HandsLayer from "./HandsLayer";
 import ScheduleLayer from "./ScheduleLayer";
+import SchedulePicker from "./SchedulePicker";
 import SecondsBar from "./SecondsBar";
 import SettingsPanel from "./SettingsPanel";
 import SkyBackground from "./SkyBackground";
@@ -273,6 +274,9 @@ export const ClockLayout: Component = () => {
       </Show>
 
       <SettingsPanel />
+
+      {/* 予定モード: リングメニュー (open 時のみマウント) */}
+      <SchedulePicker />
     </div>
   );
 };
