@@ -72,10 +72,11 @@ const SettingsPanel: Component = () => {
   onCleanup(stopRewind);
 
   // 子どもの指でも押しやすいサイズに(WCAG最小44pxを大きく上回る)
-  // タブレット(md: >= 768px)ではさらに大きめに
+  // タブレットではさらに大きめに(tablet: は幅 >= 768px かつ 高さ >= 480px。
+  // スマホ横向きのように幅は広いが高さが低いケースは除外する)
   // whitespace-nowrap: left+translateで右端寄せするボタン(1ふんもどす)がshrink-to-fitでCJK縦書きになるのを防ぐ
   const btnClass =
-    "px-2.5 py-1 md:px-6 md:py-4 rounded-full text-base md:text-xl font-bold shadow-md active:scale-90 transition-all bg-white/80 backdrop-blur-sm text-gray-700 whitespace-nowrap";
+    "px-2.5 py-1 tablet:px-6 tablet:py-4 rounded-full text-base tablet:text-xl font-bold shadow-md active:scale-90 transition-all bg-white/80 backdrop-blur-sm text-gray-700 whitespace-nowrap";
 
   // かさね/わけ切替時の位置アニメ（クロックの transform とタイミングを揃える）
   const moveTransition =

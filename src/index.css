@@ -1,6 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
 @import "tailwindcss";
 
+/* 「タブレット以上」の判定。横幅だけでなく高さも見ることで、
+   スマホのランドスケープ(幅 >= 768px でも高さが低い)を除外する。 */
+@custom-variant tablet (@media (min-width: 48rem) and (min-height: 30rem));
+
 html, body, #root {
   margin: 0;
   padding: 0;
