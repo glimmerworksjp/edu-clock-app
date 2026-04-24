@@ -1,31 +1,37 @@
-import { For, Show, createMemo } from "solid-js";
+import { For, Show, createEffect, createMemo, on, onCleanup } from "solid-js";
 import type { Component } from "solid-js";
 import { schedule, type ScheduleEvent } from "../features/schedule/state";
 import { getScheduleIcon } from "../features/schedule/icons";
+import {
+  interaction,
+  enterWarning,
+  cancelWarning,
+  triggerDelete,
+} from "../features/schedule/interaction";
 import { detailMode } from "../features/settings/detail-mode";
 
 /**
  * 時計の上に予定アイコンを描画するレイヤー。
  *
- * AnalogClock とは独立した SVG として、AnalogClock を包む div の中に絶対配置で重ねる。
- * (「分離できるものは常に分離する」原則: AnalogClock の SVG には統合しない)
+ * AnalogClock とは独立した SVG として、ClockFace を包む div の中に絶対配置で重ねる。
+ * (「分離できるものは常に分離する」原則: ClockFace の SVG には統合しない)
  *
- * 同じ viewBox (340x340) を使うので、AnalogClock の盤面と座標系が完全に一致する。
- * リサイズ時もズレない。
+ * 同じ viewBox (340x340) を使うので、ClockFace の盤面と座標系が完全に一致する。
  *
  * Props:
- *   - period:  "am" / "pm" / "merged"
- *               am  = 0..11 時のイベントだけ描画 (分け表示の AM 盤面用)
- *               pm  = 12..23 時のイベントだけ描画 (分け表示の PM 盤面用)
- *               merged = 全イベント描画 (重ね表示用、後ろレイヤーは opacity を別途指定)
+ *   - period:  "am" / "pm"  描画対象のイベントを時刻でフィルタ
  *   - opacity: レイヤー全体の不透明度 (β レンダリングで後ろレイヤーを薄くする時に使う)
  *   - zIndex:  レイヤーの z 順 (β レンダリングで前後関係を制御)
  *
- * ポインタイベントは pointer-events-none (各イベントアイコンは Phase 3 で個別に有効化)。
+ * インタラクション:
+ *   - 各アイコン: 短押しで poyon (ぴょん) アニメ、長押し 500ms で warning 状態に
+ *   - warning 中: そのアイコンが wobble (ホワホワ)、右上に 🗑️ 吹き出し出現
+ *   - 🗑️ タップ: 回転＋縮小＋フェードで削除アニメ後にデータ削除
+ *   - キャンセル: warning 中の SVG 内空タップ、または 3 秒経過
  */
 
 interface ScheduleLayerProps {
-  period: "am" | "pm" | "merged";
+  period: "am" | "pm";
   opacity?: number;
   zIndex?: number;
 }
@@ -33,34 +39,25 @@ interface ScheduleLayerProps {
 const VIEW = 340;
 const CENTER = VIEW / 2;
 
-/**
- * アイコンの中心半径 (viewBox 単位)。短針先端 (R*0.5) と色帯内側 (R-34) の間に収める。
- * 短針との被りを避けるため、可能な範囲で外側 (時間数字寄り) に配置:
- *   くわしく (R=130): hand-tip=65, band-inner=96 → 85 (中心)
- *   すっきり (R=148): hand-tip=74, band-inner=114 → 95 (中心)
- * 数字 (R-18) や色帯 (R) には届かない範囲。
- */
 const ICON_RADIUS_KUWASHIKU = 84;
 const ICON_RADIUS_SUKKIRI = 94;
-
-/** 絵文字グリフのフォントサイズ (viewBox 単位)。アイコン半径 ± ICON_SIZE/2 で短針/数字に被らない。 */
 const ICON_SIZE_KUWASHIKU = 18;
 const ICON_SIZE_SUKKIRI = 24;
-
-/**
- * アイコン背景の白円: 絵文字を白で囲んで、色帯やアイコン同士の上でも視認性を担保する。
- * em-box (font-size 四方) を囲む外接円の半径は font-size * √2/2 ≈ 0.707 倍。
- * 横長/縦長の emoji (🛌, 🚌 等) も収めつつ、見た目のサイズ感を抑えて 0.71 倍。
- */
+/** font-size に対する白背景円の半径比 (em-box 外接円 √2/2 ≈ 0.707 より少し小さく抑える) */
 const ICON_BG_RADIUS_RATIO = 0.70;
 
-/**
- * 矢印マーク (アイコンの内側=短針先端側に置く小さな三角形)。
- * 白背景円の内周に base が沿う形で、頂点は白円の外側 (= 短針の方向、クロック中心側) を指す。
- * 「この絵文字はこの時刻ぴったり」を方向性をもって示す指示子。
- */
-const TRI_BASE_HALF = 1.5;  // 底辺の半幅 (viewBox 単位)
-const TRI_HEIGHT = 2.5;     // 底辺から頂点までの高さ
+/** 矢印三角形 (白)。底辺の両端が白円周上にぴったり乗るよう sqrt(bgR² - baseHalf²) で算出。 */
+const TRI_BASE_HALF = 1.5;
+const TRI_HEIGHT = 2.5;
+
+/** インタラクション関連 */
+const LONG_PRESS_MS = 500;
+const POYON_DURATION_MS = 350;
+const POOF_DURATION_MS = 400;
+
+/** 削除ボタン (✕ 印の赤い丸吹き出し) */
+const TRASH_OFFSET = 10;
+const TRASH_RADIUS = 7;
 
 const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
   const isKuwashiku = () => detailMode() === "kuwashiku";
@@ -68,29 +65,19 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
   const iconFontSize = () => isKuwashiku() ? ICON_SIZE_KUWASHIKU : ICON_SIZE_SUKKIRI;
   const iconBgRadius = () => iconFontSize() * ICON_BG_RADIUS_RATIO;
 
-  // period 指定に従って表示対象イベントを抽出。
-  // schedule() はオブジェクトなので Object.entries で配列化、minutes は string→number 化。
   const eventsForPeriod = createMemo<ScheduleEvent[]>(() => {
     const all = schedule();
     const result: ScheduleEvent[] = [];
     for (const [m, id] of Object.entries(all)) {
       const minutes = Number(m);
       const isAm = minutes < 720;
-      if (props.period === "merged"
-        || (props.period === "am" && isAm)
-        || (props.period === "pm" && !isAm)
-      ) {
+      if ((props.period === "am" && isAm) || (props.period === "pm" && !isAm)) {
         result.push({ minutes, iconId: id });
       }
     }
     return result;
   });
 
-  /**
-   * イベントの描画位置 (viewBox 単位)。
-   * hour-hand 角度 = (minutes/60) * 30 = minutes/2 (deg, 12時=0, 3時=90)
-   * SVG 標準座標は 0deg=右、CW 正なので 12時=-90deg にオフセット。
-   */
   const angleRadOf = (minutes: number) => ((minutes / 2 - 90) * Math.PI) / 180;
 
   const positionOf = (minutes: number) => {
@@ -101,29 +88,17 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
     };
   };
 
-  /**
-   * 矢印三角形の3頂点 (SVG polygon points 形式の文字列)。
-   * 底辺の両端点を白円の周上 (= 中心から iconBgRadius 距離の円周) にピッタリ乗せる。
-   * これで底辺の弦が白円の弧と境界線で滑らかに接続する (両端がはみ出ない/凹まない)。
-   * 頂点はクロック中心方向に TRI_HEIGHT だけ突出。
-   */
   const trianglePointsOf = (minutes: number): string => {
     const angleRad = angleRadOf(minutes);
     const cosA = Math.cos(angleRad);
     const sinA = Math.sin(angleRad);
 
-    // 底辺の両端点 (left, right) を白円周上に乗せたい。
-    // 弦の中点は円中心 (アイコン中心) からの距離 sqrt(bgR^2 - baseHalf^2) の位置になる。
     const bgR = iconBgRadius();
-    const chordMidDistFromIconCenter =
-      Math.sqrt(bgR * bgR - TRI_BASE_HALF * TRI_BASE_HALF);
-
-    // クロック中心からの底辺中点距離 = アイコン中心距離 - 弦中点のアイコン中心からの距離
+    const chordMidDistFromIconCenter = Math.sqrt(bgR * bgR - TRI_BASE_HALF * TRI_BASE_HALF);
     const baseMidRadius = iconRadius() - chordMidDistFromIconCenter;
     const baseMidX = CENTER + baseMidRadius * cosA;
     const baseMidY = CENTER + baseMidRadius * sinA;
 
-    // 半径方向に対する垂直 (CCW 90°回転)
     const perpX = -sinA;
     const perpY = cosA;
 
@@ -132,13 +107,30 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
     const rightX = baseMidX - TRI_BASE_HALF * perpX;
     const rightY = baseMidY - TRI_BASE_HALF * perpY;
 
-    // 頂点: 底辺中点からさらに中心方向に TRI_HEIGHT 突出
     const apexRadius = baseMidRadius - TRI_HEIGHT;
     const apexX = CENTER + apexRadius * cosA;
     const apexY = CENTER + apexRadius * sinA;
 
     return `${leftX},${leftY} ${rightX},${rightY} ${apexX},${apexY}`;
   };
+
+  /** warning/deleting 中のイベントがこのレイヤーに属するか (= ゴミ箱を出すか) */
+  const activeInThisLayer = createMemo(() => {
+    const i = interaction();
+    if (i.type === "none") return null;
+    const isAm = i.minutes < 720;
+    if ((props.period === "am" && isAm) || (props.period === "pm" && !isAm)) {
+      return i;
+    }
+    return null;
+  });
+
+  const trashPos = createMemo(() => {
+    const a = activeInThisLayer();
+    if (!a || a.type !== "warning") return null;
+    const iconPos = positionOf(a.minutes);
+    return { x: iconPos.x + TRASH_OFFSET, y: iconPos.y - TRASH_OFFSET };
+  });
 
   return (
     <div
@@ -154,39 +146,215 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
         style="max-height: 100%; max-width: 100%;"
       >
         <For each={eventsForPeriod()}>
-          {(event) => {
-            const def = getScheduleIcon(event.iconId);
-            const pos = () => positionOf(event.minutes);
-            const triPoints = () => trianglePointsOf(event.minutes);
-            return (
-              <Show when={def}>
-                {/* 白い背景円 (アイコン視認性を担保) */}
-                <circle
-                  cx={pos().x}
-                  cy={pos().y}
-                  r={iconBgRadius()}
-                  fill="#ffffff"
-                />
-                <text
-                  x={pos().x}
-                  y={pos().y}
-                  font-size={iconFontSize()}
-                  text-anchor="middle"
-                  dominant-baseline="central"
-                >
-                  {def!.emoji}
-                </text>
-                {/* 矢印: 短針側に正確な分位置を指す */}
-                <polygon
-                  points={triPoints()}
-                  fill="#ffffff"
-                />
-              </Show>
-            );
-          }}
+          {(event) => (
+            <EventIcon
+              event={event}
+              pos={positionOf(event.minutes)}
+              triPoints={trianglePointsOf(event.minutes)}
+              iconBgRadius={iconBgRadius()}
+              iconFontSize={iconFontSize()}
+            />
+          )}
         </For>
+
+        {/* warning 中: SVG 全面の透明 rect で外タップを拾ってキャンセル。
+            アイコンより後の document order で上に乗せる (= 下のアイコンへの pointer は届かない)。 */}
+        <Show when={interaction().type === "warning"}>
+          <rect
+            x={0} y={0} width={VIEW} height={VIEW}
+            fill="transparent"
+            style={{ "pointer-events": "all" }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              cancelWarning();
+            }}
+          />
+        </Show>
+
+        {/* ゴミ箱吹き出し (warning event がこのレイヤーに属する時のみ、cancel rect の上に配置) */}
+        <Show when={trashPos()}>
+          {(pos) => (
+            <g
+              style={{ "pointer-events": "all", cursor: "pointer" }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                const a = activeInThisLayer();
+                if (a && a.type === "warning") triggerDelete(a.minutes);
+              }}
+            >
+              <circle cx={pos().x} cy={pos().y} r={TRASH_RADIUS + 1} fill="#C01030" />
+              <circle cx={pos().x} cy={pos().y} r={TRASH_RADIUS} fill="#FF4060" />
+              {/* ✕ 印は line ペアで描く (text の "✕" よりクロス角度がきれい) */}
+              <line
+                x1={pos().x - TRASH_RADIUS * 0.45}
+                y1={pos().y - TRASH_RADIUS * 0.45}
+                x2={pos().x + TRASH_RADIUS * 0.45}
+                y2={pos().y + TRASH_RADIUS * 0.45}
+                stroke="#222222"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+              <line
+                x1={pos().x - TRASH_RADIUS * 0.45}
+                y1={pos().y + TRASH_RADIUS * 0.45}
+                x2={pos().x + TRASH_RADIUS * 0.45}
+                y2={pos().y - TRASH_RADIUS * 0.45}
+                stroke="#222222"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+            </g>
+          )}
+        </Show>
       </svg>
     </div>
+  );
+};
+
+/* ============================================================================
+ * EventIcon: 1 イベント = 1 サブコンポーネント。
+ * ポインタイベント (短押し/長押し) と Web Animations API でのアニメーションを担う。
+ * ============================================================================ */
+
+interface EventIconProps {
+  event: ScheduleEvent;
+  pos: { x: number; y: number };
+  triPoints: string;
+  iconBgRadius: number;
+  iconFontSize: number;
+}
+
+const EventIcon: Component<EventIconProps> = (props) => {
+  let groupRef: SVGGElement | undefined;
+  let pressTimer: ReturnType<typeof setTimeout> | undefined;
+  let longPressed = false;
+  let wobbleAnim: Animation | undefined;
+
+  const def = () => getScheduleIcon(props.event.iconId);
+
+  const isWarning = createMemo(() => {
+    const i = interaction();
+    return i.type === "warning" && i.minutes === props.event.minutes;
+  });
+  const isDeleting = createMemo(() => {
+    const i = interaction();
+    return i.type === "deleting" && i.minutes === props.event.minutes;
+  });
+
+  // ホワホワ (wobble): warning 中は ±4° の往復アニメを継続
+  createEffect(() => {
+    if (!groupRef) return;
+    if (isWarning()) {
+      wobbleAnim = groupRef.animate(
+        [{ transform: "rotate(-4deg)" }, { transform: "rotate(4deg)" }],
+        {
+          duration: 180,
+          iterations: Infinity,
+          direction: "alternate",
+          easing: "ease-in-out",
+        }
+      );
+    } else {
+      wobbleAnim?.cancel();
+      wobbleAnim = undefined;
+    }
+  });
+
+  // くるくる〜パッ (poof): deleting 開始で 1 回だけ走らせる
+  createEffect(on(isDeleting, (deleting) => {
+    if (!groupRef || !deleting) return;
+    groupRef.animate(
+      [
+        { transform: "rotate(0deg) scale(1)", opacity: 1 },
+        { transform: "rotate(720deg) scale(0)", opacity: 0 },
+      ],
+      { duration: POOF_DURATION_MS, easing: "ease-in", fill: "forwards" }
+    );
+  }));
+
+  // ぴょん (poyon): タップごとに 1 回。Web Animations API は呼ぶたびに新しい Animation を作るので
+  // class 切替の race condition を考えなくてよい。
+  const triggerPoyon = () => {
+    if (!groupRef) return;
+    groupRef.animate(
+      [
+        { transform: "scale(1)" },
+        { transform: "scale(1.18)", offset: 0.3 },
+        { transform: "scale(0.9)", offset: 0.6 },
+        { transform: "scale(1)" },
+      ],
+      { duration: POYON_DURATION_MS, easing: "ease-out" }
+    );
+  };
+
+  const onPointerDown = (e: PointerEvent) => {
+    e.stopPropagation();
+    // 別イベントが warning/deleting 中は新規操作を受け付けない
+    if (interaction().type !== "none") return;
+    longPressed = false;
+    pressTimer = setTimeout(() => {
+      longPressed = true;
+      enterWarning(props.event.minutes);
+    }, LONG_PRESS_MS);
+  };
+
+  const onPointerUp = (e: PointerEvent) => {
+    e.stopPropagation();
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      pressTimer = undefined;
+    }
+    // 長押しが先に発火していたら何もしない (既に warning に入った)
+    if (!longPressed && interaction().type === "none") {
+      triggerPoyon();
+    }
+  };
+
+  const onPointerCancel = () => {
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      pressTimer = undefined;
+    }
+  };
+
+  onCleanup(() => {
+    if (pressTimer) clearTimeout(pressTimer);
+    wobbleAnim?.cancel();
+  });
+
+  return (
+    <Show when={def()}>
+      <g
+        ref={groupRef}
+        style={{
+          // bbox 中心を transform 原点にすることで、回転/拡縮がアイコン中心まわりで起きる
+          "transform-box": "fill-box",
+          "transform-origin": "center",
+          "pointer-events": "auto",
+          cursor: "pointer",
+        }}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+      >
+        <circle
+          cx={props.pos.x}
+          cy={props.pos.y}
+          r={props.iconBgRadius}
+          fill="#ffffff"
+        />
+        <text
+          x={props.pos.x}
+          y={props.pos.y}
+          font-size={props.iconFontSize}
+          text-anchor="middle"
+          dominant-baseline="central"
+        >
+          {def()!.emoji}
+        </text>
+        <polygon points={props.triPoints} fill="#ffffff" />
+      </g>
+    </Show>
   );
 };
 
