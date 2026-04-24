@@ -9,7 +9,7 @@ import SettingsPanel from "./SettingsPanel";
 import SkyBackground from "./SkyBackground";
 import { useCurrentTime } from "../hooks/useCurrentTime";
 import { useOrientation } from "../hooks/useOrientation";
-import { rotateActive, rotateMinutes, rotateMode, seekRotate } from "../features/free-rotation/state";
+import { rotateActive, rotateMinutes, rotateMode, seekRotate, setRotateMode } from "../features/free-rotation/state";
 import { useAutoRotateTick } from "../features/free-rotation/auto-rotate";
 import {
   useMergeAnimation,
@@ -37,6 +37,13 @@ export const ClockLayout: Component = () => {
       return { hours: Math.floor(m / 60), minutes: m % 60, seconds: 0 };
     }
     return time();
+  });
+
+  // 予定アイコンとのマッチ判定用に丸めた整数分 (0..1439)。
+  // 自由回転 (auto/drag) では rotateMinutes が小数になるので Math.round で四捨五入。
+  const displayedMinutesTotal = createMemo(() => {
+    const d = displayed();
+    return ((d.hours * 60 + Math.round(d.minutes)) % 1440 + 1440) % 1440;
   });
 
   // AM/PM バッジ長押しで反対側プレビュー
@@ -76,7 +83,13 @@ export const ClockLayout: Component = () => {
   };
 
   const onDragStart = (e: PointerEvent) => {
-    if (!rotateActive() || rotateMode() !== "manual") return;
+    if (!rotateActive()) return;
+    // 自動回転中の背景タップ → manual に切り替えて止める
+    // (SettingsPanel の左下「すとっぷ」ボタンを押すのと同等の操作)
+    if (rotateMode() === "auto") {
+      setRotateMode("manual");
+      return;
+    }
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     dragRef = dragStart(e, rotateMinutes());
     setDragging(true);
@@ -163,7 +176,7 @@ export const ClockLayout: Component = () => {
           <Show when={(!mergedVisible() || transitioning()) && (isAm() || !dragging())}>
             <ClockFace period="am" hours={amTime().hours} />
           </Show>
-          <ScheduleLayer period="am" />
+          <ScheduleLayer period="am" displayedMinutes={displayedMinutesTotal()} />
           {/* 針は予定アイコンの上に乗せる */}
           <HandsLayer hours={amTime().hours} minutes={amTime().minutes} />
         </div>
@@ -188,7 +201,7 @@ export const ClockLayout: Component = () => {
           <Show when={(!mergedVisible() || transitioning()) && (!isAm() || !dragging())}>
             <ClockFace period="pm" hours={pmTime().hours} />
           </Show>
-          <ScheduleLayer period="pm" />
+          <ScheduleLayer period="pm" displayedMinutes={displayedMinutesTotal()} />
           {/* 針は予定アイコンの上に乗せる */}
           <HandsLayer hours={pmTime().hours} minutes={pmTime().minutes} />
         </div>
@@ -226,12 +239,16 @@ export const ClockLayout: Component = () => {
             <Show
               when={displayed().hours < 12}
               fallback={<>
-                <ScheduleLayer period="am" opacity={0.15} zIndex={1} />
-                <ScheduleLayer period="pm" opacity={1} zIndex={2} />
+                <ScheduleLayer period="am" opacity={0.15} scale={0.85} zIndex={1}
+                  displayedMinutes={displayedMinutesTotal()} />
+                <ScheduleLayer period="pm" opacity={1} zIndex={2}
+                  displayedMinutes={displayedMinutesTotal()} />
               </>}
             >
-              <ScheduleLayer period="pm" opacity={0.15} zIndex={1} />
-              <ScheduleLayer period="am" opacity={1} zIndex={2} />
+              <ScheduleLayer period="pm" opacity={0.15} scale={0.85} zIndex={1}
+                displayedMinutes={displayedMinutesTotal()} />
+              <ScheduleLayer period="am" opacity={1} zIndex={2}
+                displayedMinutes={displayedMinutesTotal()} />
             </Show>
             {/* 針は予定アイコンの上に乗せる */}
             <HandsLayer hours={displayed().hours} minutes={displayed().minutes} />

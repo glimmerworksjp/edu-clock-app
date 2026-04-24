@@ -34,6 +34,10 @@ interface ScheduleLayerProps {
   period: "am" | "pm";
   opacity?: number;
   zIndex?: number;
+  /** レイヤー全体のスケール (1 で等倍)。merged β 表示の後ろレイヤーで奥行きを出す用。 */
+  scale?: number;
+  /** 現在表示中の時刻 (0..1439 の整数、分単位)。一致するイベントは continuous でポヨンポヨンする */
+  displayedMinutes: number;
 }
 
 const VIEW = 340;
@@ -52,9 +56,39 @@ const TRI_HEIGHT = 2.5;
 
 /** インタラクション関連 */
 const LONG_PRESS_MS = 500;
-const POYON_DURATION_MS = 350;
+/** ポヨンポヨンッ: 2 段バウンス。クリック時 + マッチ中の continuous loop で共通 */
+const POYON_POYON_DURATION_MS = 500;
+/**
+ * マッチ中の continuous loop の 1 周期。
+ * 0..(POYON_POYON_DURATION_MS/MATCH_LOOP_DURATION_MS)% で 2段バウンス、残りは rest (静止)。
+ * iterations: Infinity で延々繰り返す。
+ */
+const MATCH_LOOP_DURATION_MS = 1500;
 /** くるくる〜パッ: 0..65% は等速で 720° 回転 (見せ場)、65..100% で +360° 回転しながら縮小+フェード */
 const POOF_DURATION_MS = 900;
+
+/** 2 段バウンスの keyframes (offsets が 0..1) */
+const POYON_POYON_KEYFRAMES: Keyframe[] = [
+  { transform: "scale(1)", offset: 0 },
+  { transform: "scale(1.18)", offset: 0.20 },
+  { transform: "scale(0.92)", offset: 0.40 },
+  { transform: "scale(1.12)", offset: 0.60 },
+  { transform: "scale(0.96)", offset: 0.80 },
+  { transform: "scale(1)", offset: 1 },
+];
+/** continuous loop 用: 前半に 2 段バウンス、後半は scale 1 で rest */
+const MATCH_LOOP_KEYFRAMES: Keyframe[] = (() => {
+  const bouncePortion = POYON_POYON_DURATION_MS / MATCH_LOOP_DURATION_MS;  // 0.333
+  return [
+    { transform: "scale(1)", offset: 0 },
+    { transform: "scale(1.18)", offset: bouncePortion * 0.20 },
+    { transform: "scale(0.92)", offset: bouncePortion * 0.40 },
+    { transform: "scale(1.12)", offset: bouncePortion * 0.60 },
+    { transform: "scale(0.96)", offset: bouncePortion * 0.80 },
+    { transform: "scale(1)", offset: bouncePortion },
+    { transform: "scale(1)", offset: 1 },
+  ];
+})();
 
 /** 削除ボタン (✕ 印の赤い丸吹き出し) */
 const TRASH_OFFSET = 10;
@@ -139,6 +173,7 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
       style={{
         opacity: props.opacity ?? 1,
         "z-index": props.zIndex,
+        transform: props.scale != null && props.scale !== 1 ? `scale(${props.scale})` : undefined,
       }}
     >
       <svg
@@ -154,6 +189,7 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
               triPoints={trianglePointsOf(event.minutes)}
               iconBgRadius={iconBgRadius()}
               iconFontSize={iconFontSize()}
+              isMatched={props.displayedMinutes === event.minutes}
             />
           )}
         </For>
@@ -223,6 +259,8 @@ interface EventIconProps {
   triPoints: string;
   iconBgRadius: number;
   iconFontSize: number;
+  /** 現在の displayed time がこのイベント時刻と一致しているか (連続ポヨンポヨン用) */
+  isMatched: boolean;
 }
 
 const EventIcon: Component<EventIconProps> = (props) => {
@@ -230,6 +268,7 @@ const EventIcon: Component<EventIconProps> = (props) => {
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
   let longPressed = false;
   let wobbleAnim: Animation | undefined;
+  let matchAnim: Animation | undefined;
 
   const def = () => getScheduleIcon(props.event.iconId);
 
@@ -276,20 +315,38 @@ const EventIcon: Component<EventIconProps> = (props) => {
     );
   }));
 
-  // ぴょん (poyon): タップごとに 1 回。Web Animations API は呼ぶたびに新しい Animation を作るので
-  // class 切替の race condition を考えなくてよい。
-  const triggerPoyon = () => {
+  // ポヨンポヨンッ (2段バウンス): タップごとに 1 回。
+  // 同じ keyframes を continuous loop でも使う (下の matchAnim 参照)。
+  const triggerPoyonPoyon = () => {
     if (!groupRef) return;
-    groupRef.animate(
-      [
-        { transform: "scale(1)" },
-        { transform: "scale(1.18)", offset: 0.3 },
-        { transform: "scale(0.9)", offset: 0.6 },
-        { transform: "scale(1)" },
-      ],
-      { duration: POYON_DURATION_MS, easing: "ease-out" }
-    );
+    groupRef.animate(POYON_POYON_KEYFRAMES, {
+      duration: POYON_POYON_DURATION_MS,
+      easing: "ease-out",
+    });
   };
+
+  // マッチ中の continuous ポヨンポヨン: 1 周期 = 2段バウンス + rest。延々ループ。
+  // warning/deleting 中は走らせない (他のアニメと干渉するため)。
+  createEffect(() => {
+    if (!groupRef) return;
+    if (isWarning() || isDeleting()) {
+      matchAnim?.cancel();
+      matchAnim = undefined;
+      return;
+    }
+    if (props.isMatched) {
+      if (!matchAnim) {
+        matchAnim = groupRef.animate(MATCH_LOOP_KEYFRAMES, {
+          duration: MATCH_LOOP_DURATION_MS,
+          iterations: Infinity,
+          easing: "ease-out",
+        });
+      }
+    } else {
+      matchAnim?.cancel();
+      matchAnim = undefined;
+    }
+  });
 
   const onPointerDown = (e: PointerEvent) => {
     e.stopPropagation();
@@ -310,7 +367,7 @@ const EventIcon: Component<EventIconProps> = (props) => {
     }
     // 長押しが先に発火していたら何もしない (既に warning に入った)
     if (!longPressed && interaction().type === "none") {
-      triggerPoyon();
+      triggerPoyonPoyon();
     }
   };
 
@@ -324,6 +381,7 @@ const EventIcon: Component<EventIconProps> = (props) => {
   onCleanup(() => {
     if (pressTimer) clearTimeout(pressTimer);
     wobbleAnim?.cancel();
+    matchAnim?.cancel();
   });
 
   return (

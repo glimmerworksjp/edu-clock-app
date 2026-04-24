@@ -11,6 +11,7 @@ import {
 } from "../features/schedule/picker";
 import { setScheduleAt } from "../features/schedule/state";
 import { rotateMinutes } from "../features/free-rotation/state";
+import { useIsTablet } from "../hooks/useIsTablet";
 
 /**
  * 予定アイコン選択用リングメニュー。
@@ -25,8 +26,13 @@ import { rotateMinutes } from "../features/free-rotation/state";
  *   - Overlay 空タップ → 閉じる
  */
 
-const RING_RADIUS_PX = 110;
-const ICON_SIZE_PX = 44;
+// SettingsPanel の四隅ボタンと同じ tablet ブレイクポイントで大きくする
+const RING_RADIUS_MOBILE = 110;
+const RING_RADIUS_TABLET = 160;
+const ICON_SIZE_MOBILE = 44;
+const ICON_SIZE_TABLET = 64;
+const ICON_FONT_MOBILE = 26;
+const ICON_FONT_TABLET = 38;
 const STAGGER_MS = 30;
 const APPEAR_DURATION_MS = 280;
 
@@ -46,6 +52,11 @@ const SchedulePicker: Component = () => {
 };
 
 const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
+  const isTablet = useIsTablet();
+  const ringRadius = () => isTablet() ? RING_RADIUS_TABLET : RING_RADIUS_MOBILE;
+  const iconSize = () => isTablet() ? ICON_SIZE_TABLET : ICON_SIZE_MOBILE;
+  const iconFont = () => isTablet() ? ICON_FONT_TABLET : ICON_FONT_MOBILE;
+
   // ドラッグ状態 (= 「タップで閉じる」と「ドラッグで回転」の区別に使う)
   let dragStart: { x: number; y: number } | null = null;
   let dragHappened = false;
@@ -109,7 +120,14 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
     >
       <For each={SCHEDULE_ICONS}>
         {(icon, i) => (
-          <RingIcon icon={icon} index={i()} origin={props.origin} />
+          <RingIcon
+            icon={icon}
+            index={i()}
+            origin={props.origin}
+            ringRadius={ringRadius()}
+            iconSize={iconSize()}
+            iconFont={iconFont()}
+          />
         )}
       </For>
     </div>
@@ -120,6 +138,9 @@ const RingIcon: Component<{
   icon: ScheduleIconDef;
   index: number;
   origin: PickerOrigin;
+  ringRadius: number;
+  iconSize: number;
+  iconFont: number;
 }> = (props) => {
   let buttonRef: HTMLButtonElement | undefined;
 
@@ -131,24 +152,24 @@ const RingIcon: Component<{
     const a = angleDeg();
     const rad = (a * Math.PI) / 180;
     return {
-      x: props.origin.x + RING_RADIUS_PX * Math.cos(rad),
-      y: props.origin.y + RING_RADIUS_PX * Math.sin(rad),
+      x: props.origin.x + props.ringRadius * Math.cos(rad),
+      y: props.origin.y + props.ringRadius * Math.sin(rad),
     };
   });
 
   // 各アイコンは fixed で left:0/top:0、translate で目標位置へ。
   // rotation 変化は Solid のリアクティブ更新で transform が再計算される (CSS animation 不要)。
   const transform = () =>
-    `translate(${finalPos().x - ICON_SIZE_PX / 2}px, ${finalPos().y - ICON_SIZE_PX / 2}px)`;
+    `translate(${finalPos().x - props.iconSize / 2}px, ${finalPos().y - props.iconSize / 2}px)`;
 
   // 開始時アニメ: タップ位置 (origin) → 最終位置 + scale 0 → 1 + opacity 0 → 1
   // stagger は index * STAGGER_MS で、12時から CW に順次出現する
   onMount(() => {
     if (!buttonRef) return;
     const startTransform =
-      `translate(${props.origin.x - ICON_SIZE_PX / 2}px, ${props.origin.y - ICON_SIZE_PX / 2}px) scale(0)`;
+      `translate(${props.origin.x - props.iconSize / 2}px, ${props.origin.y - props.iconSize / 2}px) scale(0)`;
     const endTransform =
-      `translate(${finalPos().x - ICON_SIZE_PX / 2}px, ${finalPos().y - ICON_SIZE_PX / 2}px) scale(1)`;
+      `translate(${finalPos().x - props.iconSize / 2}px, ${finalPos().y - props.iconSize / 2}px) scale(1)`;
     buttonRef.animate(
       [
         { transform: startTransform, opacity: 0 },
@@ -174,9 +195,9 @@ const RingIcon: Component<{
       ref={buttonRef}
       class="fixed top-0 left-0 rounded-full bg-white shadow-lg flex items-center justify-center before:hidden"
       style={{
-        width: `${ICON_SIZE_PX}px`,
-        height: `${ICON_SIZE_PX}px`,
-        "font-size": "26px",
+        width: `${props.iconSize}px`,
+        height: `${props.iconSize}px`,
+        "font-size": `${props.iconFont}px`,
         transform: transform(),
       }}
       onClick={onClick}
