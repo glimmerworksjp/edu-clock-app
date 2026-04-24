@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="2 43 426 426">
   <!-- 青と紫は同じ大きさの円(r=190)。青は左に 20、紫は右に 20 ずらして
        配置。両円が接触する部分(= 青の外周のライン)に mask で透明なリング
        を被せ、青と紫の間に視覚的な隙間を立ち上げる。紫は右側半円のみ。 -->
@@ -9,6 +9,9 @@
       <circle cx="192" cy="256" r="190" fill="none" stroke="black" stroke-width="32"/>
     </mask>
   </defs>
+
+  <!-- 背景 薄ピンク -->
+  <rect x="2" y="43" width="426" height="426" fill="#fdecf1"/>
 
   <!-- 前盤 青 (中心 192, 256)、左へ 20 シフト -->
   <g>
