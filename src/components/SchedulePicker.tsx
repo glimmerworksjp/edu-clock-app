@@ -33,9 +33,9 @@ const APPEAR_DURATION_MS = 280;
 /** 「ドラッグ」と「タップ」を区別する閾値 (px) */
 const DRAG_THRESHOLD_PX = 5;
 /** ドラッグ感度 (画面 1px 移動 → リング n° 回転) */
-const DRAG_DEG_PER_PX = 0.8;
+const DRAG_DEG_PER_PX = 0.2;
 /** マウスホイール感度 (deltaY 1 単位 → リング n° 回転) */
-const WHEEL_DEG_PER_DELTA = 0.4;
+const WHEEL_DEG_PER_DELTA = 0.1;
 
 const SchedulePicker: Component = () => {
   return (
