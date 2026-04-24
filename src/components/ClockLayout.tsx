@@ -16,6 +16,7 @@ import {
   splitShadow,
 } from "../features/free-rotation/merge-animation";
 import { useAmPmPreviewHold } from "../features/am-pm-preview";
+import { MORPHING_SLOT } from "../features/view-transition";
 import { useI18n } from "../i18n";
 import { dragStart, dragAdvance, type DragDragState } from "../features/free-rotation/drag";
 
@@ -229,7 +230,10 @@ export const ClockLayout: Component = () => {
         </div>
       </Show>
 
-      {/* 現在のAM/PM表示 (通常モードのみ) */}
+      {/* AM/PM バッジ + 長押しプレビュー (通常モードのみ)
+          自由回転 manual の予定ボタン (将来追加) と MORPHING_SLOT.LEFT を共有し、
+          モード遷移時にブラウザがモーフィング描画する。
+          (slot 共有関係の一覧は features/view-transition.ts を参照) */}
       <Show when={!rotateActive()}>
         <div
           class={
@@ -242,7 +246,7 @@ export const ClockLayout: Component = () => {
             "background-color": isAm() ? "#0080D8" : "#E02068",
             color: "#ffffff",
             "touch-action": "none",
-            "view-transition-name": "clock-left-slot",
+            "view-transition-name": MORPHING_SLOT.LEFT,
           }}
           onPointerDown={startHold}
           onPointerUp={clearHold}

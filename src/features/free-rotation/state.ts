@@ -4,6 +4,22 @@ import { createSignal } from "solid-js";
  * 自由回転モード (じゆうかいてん) のセッション状態。
  * 永続化しない (アプリ再起動で初期状態に戻る)。
  *
+ * ===== モード階層 (このファイルが定義する全状態の関係) =====
+ *
+ *   通常モード (rotateActive() === false)
+ *     現在時刻を表示。AM/PM バッジ + 長押しプレビューが出る。
+ *     ※ rotateMerged は無意味 (mergedVisible が rotateActive と AND を取るため
+ *        通常モードでは絶対に merged 表示にならない)
+ *
+ *   自由回転モード (rotateActive() === true)
+ *     ├─ manual サブモード (rotateMode() === "manual")
+ *     │    ドラッグで時刻変更、1ふんもどす、ランダム、かさね/わけ切替
+ *     │    rotateMerged: 重ね (1つの盤面) / わけ (AM/PM 別盤面)
+ *     │                  ← ここでのみ意味を持つ
+ *     │
+ *     └─ auto サブモード (rotateMode() === "auto")
+ *          1日24秒で自動進行
+ *
  * Public API:
  *   - accessor: rotateActive, rotateMinutes, rotateMode, rotateMerged
  *   - action:   enterRotate, exitRotate, seekRotate, setRotateMode, toggleMerged
@@ -27,6 +43,9 @@ function nowAsMinutes(): number {
 const [rotateActive, setActiveRaw] = createSignal(false);
 const [rotateMinutes, setMinutesRaw] = createSignal(nowAsMinutes());
 const [rotateMode, setModeRaw] = createSignal<RotateMode>("manual");
+// rotateActive のサブ状態。rotateActive() === false の間は意味を持たない
+// (mergedVisible が rotateActive() && rotateMerged() の AND を取るため、
+//  通常モードでは表示に反映されない)
 const [rotateMerged, setMergedRaw] = createSignal(true);
 
 // ===== Public accessors (read-only) =====

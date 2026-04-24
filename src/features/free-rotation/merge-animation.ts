@@ -19,6 +19,9 @@ import { rotateActive, rotateMerged } from "./state";
 const TRANSITION_DURATION_MS = 620;
 
 export const useMergeAnimation = () => {
+  // mergedVisible は「実際に merged 表示が見えているか」。rotateActive と rotateMerged の AND。
+  // この AND が「通常モードでは絶対に merged 表示にならない」モード階層上の排他性を担保する。
+  // (詳細なモード階層は features/free-rotation/state.ts の冒頭コメントを参照)
   const mergedVisible = createMemo(() => rotateActive() && rotateMerged());
   const [transitioning, setTransitioning] = createSignal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;

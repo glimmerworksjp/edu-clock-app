@@ -20,7 +20,7 @@ import {
 import { useRewindHold } from "../features/free-rotation/rewind";
 import { randomizeRotate } from "../features/free-rotation/random-time";
 import { useButtonsDimmedDuringMergeFlip } from "../features/free-rotation/merge-animation";
-import { withViewTransition } from "../features/view-transition";
+import { withViewTransition, MORPHING_SLOT } from "../features/view-transition";
 
 const SettingsPanel: Component = () => {
   const { t } = useI18n();
@@ -76,11 +76,13 @@ const SettingsPanel: Component = () => {
           {/* TODO: このスロット (横長分け=上センター, 横長重ね=右上 / 縦長分け=左センター, 縦長重ね=左下寄り)
               に「よてい」ボタンを追加予定 */}
 
-          {/* 1ふんもどす
-              横長分け=下センター, 横長重ね=右下寄り (てまわしと同じ縦ライン)
+          {/* 1ふんもどす (自由回転 manual のみ)
+              通常モードのパレット切替と MORPHING_SLOT.RIGHT を共有し、
+              モード遷移時にブラウザがモーフィング描画する。
+              (slot 共有関係の一覧は features/view-transition.ts を参照)
+              横長分け=下センター, 横長重ね=右下寄り
               縦長分け=右センター, 縦長重ね=右下寄り
-              縦横アニメ用に left+top+transform で統一
-              長押しで連続 */}
+              縦横アニメ用に left+top+transform で統一、長押しで連続 */}
           <button
             class={
               "fixed z-50 " +
@@ -97,7 +99,7 @@ const SettingsPanel: Component = () => {
               "touch-action": "none",
               transition: moveTransition + ", " + dimTransition,
               opacity: buttonsDimmed() ? 0.08 : 1,
-              "view-transition-name": "clock-right-slot",
+              "view-transition-name": MORPHING_SLOT.RIGHT,
             }}
             onPointerDown={startRewind}
             onPointerUp={stopRewind}
