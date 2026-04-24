@@ -262,10 +262,15 @@ export const ClockLayout: Component = () => {
         onPointerUp={onDragEnd}
         onPointerCancel={onDragEnd}
       >
-        {/* AM（ドラッグ中は裏時計を描画しない=重い opacity レイヤーも消える） */}
+        {/* AM（ドラッグ中は裏時計を描画しない=重い opacity レイヤーも消える）
+            負マージンで中央方向に少しオーバーラップ→盤面サイズは保ちつつ
+            四隅にボタンスペースを確保 */}
         <div
           ref={amWrapperRef}
-          class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0"
+          class={
+            "flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 " +
+            (isLandscape() ? "-mr-3" : "-mb-3")
+          }
           style={{
             transform: amTransform(),
             opacity: mergedVisible() ? 0 : 1,
@@ -288,7 +293,10 @@ export const ClockLayout: Component = () => {
         {/* PM */}
         <div
           ref={pmWrapperRef}
-          class="flex-1 flex flex-col items-center justify-center min-h-0 min-w-0"
+          class={
+            "flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 " +
+            (isLandscape() ? "-ml-3" : "-mt-3")
+          }
           style={{
             transform: pmTransform(),
             opacity: mergedVisible() ? 0 : 1,
@@ -355,7 +363,7 @@ export const ClockLayout: Component = () => {
       <Show when={!rotate.active}>
         <div
           class={
-            "absolute z-20 px-3 py-1 md:px-4 md:py-1.5 rounded-full text-xs md:text-sm font-black shadow-md cursor-pointer " +
+            "absolute z-20 px-2.5 py-1 md:px-6 md:py-4 rounded-full text-base md:text-xl font-black shadow-md cursor-pointer " +
             (isLandscape()
               ? "left-1/2 top-2 -translate-x-1/2"
               : "left-2 top-1/2 -translate-y-1/2")
