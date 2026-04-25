@@ -18,7 +18,7 @@ import { persistedSignal } from "../../lib/persisted-signal";
 export type ColorMode = "sector" | "badge";
 
 // ===== Internal state (raw setter is intentionally not exported) =====
-const [colorMode, setColorMode] = persistedSignal<ColorMode>("colorMode", "sector");
+const [colorMode, setColorMode] = persistedSignal<ColorMode>("colorMode", "badge");
 
 // ===== Public accessor (read-only) =====
 export { colorMode };

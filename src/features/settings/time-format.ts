@@ -14,7 +14,7 @@ import { persistedSignal } from "../../lib/persisted-signal";
 export type TimeFormat = "24h" | "12h";
 
 // ===== Internal state =====
-const [timeFormat, setTimeFormat] = persistedSignal<TimeFormat>("timeFormat", "24h");
+const [timeFormat, setTimeFormat] = persistedSignal<TimeFormat>("timeFormat", "12h");
 
 // ===== Public accessor =====
 export { timeFormat };

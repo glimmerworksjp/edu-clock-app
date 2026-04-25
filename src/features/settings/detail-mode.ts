@@ -14,7 +14,7 @@ import { persistedSignal } from "../../lib/persisted-signal";
 export type DetailMode = "kuwashiku" | "sukkiri";
 
 // ===== Internal state =====
-const [detailMode, setDetailMode] = persistedSignal<DetailMode>("detailMode", "kuwashiku");
+const [detailMode, setDetailMode] = persistedSignal<DetailMode>("detailMode", "sukkiri");
 
 // ===== Public accessor =====
 export { detailMode };
