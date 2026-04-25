@@ -270,24 +270,26 @@ export const ClockLayout: Component = () => {
                 現在の period (displayed().hours < 12) を上 + 不透明、もう片方は強めに薄く後ろ。
                 後ろレイヤーは dimmed + dimOpacity={0.15} で event-level に薄くするので、
                 window 内の予定 (= もうすぐ起きる予定) はハッキリ見える。
+                前後関係は document order で決める (back を先, front を後)。z-index は使わない:
+                正の z-index を当てると、z-auto の HandsLayer を覆ってしまう。
                 merge transition 中は AM/PM 二重描画 + 合成負荷を避けるため一時的に外す。 */}
             <Show when={!transitioning()}>
               <Show
                 when={displayed().hours < 12}
                 fallback={<>
-                  <ScheduleLayer period="am" dimmed dimOpacity={0.15} scale={0.85} zIndex={1}
+                  <ScheduleLayer period="am" dimmed dimOpacity={0.15} scale={0.85}
                     displayedMinutes={displayedMinutesTotal()} />
-                  <ScheduleLayer period="pm" zIndex={2}
+                  <ScheduleLayer period="pm"
                     displayedMinutes={displayedMinutesTotal()} />
                 </>}
               >
-                <ScheduleLayer period="pm" dimmed dimOpacity={0.15} scale={0.85} zIndex={1}
+                <ScheduleLayer period="pm" dimmed dimOpacity={0.15} scale={0.85}
                   displayedMinutes={displayedMinutesTotal()} />
-                <ScheduleLayer period="am" zIndex={2}
+                <ScheduleLayer period="am"
                   displayedMinutes={displayedMinutesTotal()} />
               </Show>
             </Show>
-            {/* 針は予定アイコンの上に乗せる */}
+            {/* 針は document order が最後 → z-auto の中で最前面 → 予定アイコンの上に乗る */}
             <HandsLayer hours={displayed().hours} minutes={displayed().minutes} />
           </div>
         </div>

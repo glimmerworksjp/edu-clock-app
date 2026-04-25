@@ -22,7 +22,6 @@ import { animateMotion } from "../lib/motion";
  * Props:
  *   - period:  "am" / "pm"  描画対象のイベントを時刻でフィルタ
  *   - opacity: レイヤー全体の不透明度 (β レンダリングで後ろレイヤーを薄くする時に使う)
- *   - zIndex:  レイヤーの z 順 (β レンダリングで前後関係を制御)
  *
  * インタラクション:
  *   - 各アイコン: 短押しで poyon (ぴょん) アニメ、長押し 500ms で warning 状態に
@@ -33,7 +32,6 @@ import { animateMotion } from "../lib/motion";
 
 interface ScheduleLayerProps {
   period: "am" | "pm";
-  zIndex?: number;
   /** レイヤー全体のスケール (1 で等倍)。merged β 表示の後ろレイヤーで奥行きを出す用。 */
   scale?: number;
   /** レイヤー全体に直接かける opacity (= wrapper div の opacity)。
@@ -255,7 +253,6 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
       class="absolute inset-0 flex items-center justify-center pointer-events-none"
       style={{
         opacity: props.opacity,
-        "z-index": props.zIndex,
         transform: props.scale != null && props.scale !== 1 ? `scale(${props.scale})` : undefined,
       }}
     >
