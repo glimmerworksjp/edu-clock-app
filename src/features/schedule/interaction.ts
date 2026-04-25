@@ -1,5 +1,6 @@
 import { createSignal } from "solid-js";
 import { deleteScheduleAt } from "./state";
+import { motionAllowed } from "../../lib/motion";
 
 /**
  * 予定アイコンの削除 UX 状態。
@@ -60,13 +61,17 @@ export const cancelWarning = () => {
 /**
  * ゴミ箱タップ時に呼ぶ。deleting 状態に遷移、アニメ後にデータ削除して none に戻す。
  * 削除アニメ中は別のイベントの操作を受け付けない (interaction が "none" でない間は新規操作を弾く)。
+ *
+ * reduce-motion 中はアニメ自体が走らないので待ち時間を 0 にして即削除する
+ * (アイコンが何も起きずに 900ms 居続けるのを避けるため)。
  */
 export const triggerDelete = (minutes: number) => {
   if (warningTimer) clearTimeout(warningTimer);
   warningTimer = undefined;
   setInteractionRaw({ type: "deleting", minutes });
+  const delay = motionAllowed() ? DELETE_ANIMATION_MS : 0;
   setTimeout(() => {
     deleteScheduleAt(minutes);
     setInteractionRaw({ type: "none" });
-  }, DELETE_ANIMATION_MS);
+  }, delay);
 };

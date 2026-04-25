@@ -9,6 +9,7 @@ import {
   triggerDelete,
 } from "../features/schedule/interaction";
 import { detailMode } from "../features/settings/detail-mode";
+import { animateMotion } from "../lib/motion";
 
 /**
  * 時計の上に予定アイコンを描画するレイヤー。
@@ -267,8 +268,8 @@ const EventIcon: Component<EventIconProps> = (props) => {
   let groupRef: SVGGElement | undefined;
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
   let longPressed = false;
-  let wobbleAnim: Animation | undefined;
-  let matchAnim: Animation | undefined;
+  let wobbleAnim: Animation | null = null;
+  let matchAnim: Animation | null = null;
 
   const def = () => getScheduleIcon(props.event.iconId);
 
@@ -285,7 +286,9 @@ const EventIcon: Component<EventIconProps> = (props) => {
   createEffect(() => {
     if (!groupRef) return;
     if (isWarning()) {
-      wobbleAnim = groupRef.animate(
+      wobbleAnim?.cancel();
+      wobbleAnim = animateMotion(
+        groupRef,
         [{ transform: "rotate(-4deg)" }, { transform: "rotate(4deg)" }],
         {
           duration: 180,
@@ -296,7 +299,7 @@ const EventIcon: Component<EventIconProps> = (props) => {
       );
     } else {
       wobbleAnim?.cancel();
-      wobbleAnim = undefined;
+      wobbleAnim = null;
     }
   });
 
@@ -305,7 +308,8 @@ const EventIcon: Component<EventIconProps> = (props) => {
   // 65..100%: +360° (合計 1080°) しながら scale 1→0 + opacity 1→0
   createEffect(on(isDeleting, (deleting) => {
     if (!groupRef || !deleting) return;
-    groupRef.animate(
+    animateMotion(
+      groupRef,
       [
         { transform: "rotate(0deg) scale(1)", opacity: 1, offset: 0 },
         { transform: "rotate(720deg) scale(1)", opacity: 1, offset: 0.65 },
@@ -319,7 +323,7 @@ const EventIcon: Component<EventIconProps> = (props) => {
   // 同じ keyframes を continuous loop でも使う (下の matchAnim 参照)。
   const triggerPoyonPoyon = () => {
     if (!groupRef) return;
-    groupRef.animate(POYON_POYON_KEYFRAMES, {
+    animateMotion(groupRef, POYON_POYON_KEYFRAMES, {
       duration: POYON_POYON_DURATION_MS,
       easing: "ease-out",
     });
@@ -331,12 +335,12 @@ const EventIcon: Component<EventIconProps> = (props) => {
     if (!groupRef) return;
     if (isWarning() || isDeleting()) {
       matchAnim?.cancel();
-      matchAnim = undefined;
+      matchAnim = null;
       return;
     }
     if (props.isMatched) {
       if (!matchAnim) {
-        matchAnim = groupRef.animate(MATCH_LOOP_KEYFRAMES, {
+        matchAnim = animateMotion(groupRef, MATCH_LOOP_KEYFRAMES, {
           duration: MATCH_LOOP_DURATION_MS,
           iterations: Infinity,
           easing: "ease-out",
@@ -344,7 +348,7 @@ const EventIcon: Component<EventIconProps> = (props) => {
       }
     } else {
       matchAnim?.cancel();
-      matchAnim = undefined;
+      matchAnim = null;
     }
   });
 

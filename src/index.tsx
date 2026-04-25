@@ -1,6 +1,11 @@
 /* @refresh reload */
 import { render } from "solid-js/web";
 import "./index.css";
+// アクセシビリティ: prefers-reduced-motion を尊重して装飾アニメを抑制する。
+// この 1 行を消せば全機能 dormant (素通し)、コードベースから完全に外したい場合は
+// src/lib/motion.ts と motion-bootstrap.ts を消し、components の animateMotion 呼び出しを
+// el.animate に戻し、index.css の body.motion-reduce ブロックを消せば良い。
+import "./lib/motion-bootstrap";
 import App from "./App";
 
 const root = document.getElementById("root");

@@ -44,11 +44,8 @@ const SettingsPanel: Component = () => {
   const btnClass =
     "px-2.5 py-1 tablet:px-6 tablet:py-4 rounded-full text-base tablet:text-xl font-bold shadow-md active:scale-90 transition-all bg-white/80 backdrop-blur-sm text-gray-700 whitespace-nowrap";
 
-  // かさね/わけ切替時の位置アニメ (クロックの transform とタイミングを揃える)
-  const moveTransition =
-    "top 560ms cubic-bezier(.34,1.56,.64,1), left 560ms cubic-bezier(.34,1.56,.64,1), right 560ms cubic-bezier(.34,1.56,.64,1), bottom 560ms cubic-bezier(.34,1.56,.64,1), transform 150ms ease";
-
-  const dimTransition = "opacity 100ms ease";
+  // かさね/わけ切替時のボタン位置アニメ + dim 用 transition は
+  // .settings-button-transition class で定義 (reduce-motion 対応のため inline 化を避ける)。
 
   return (
     <>
@@ -84,7 +81,7 @@ const SettingsPanel: Component = () => {
           <button
             ref={(el) => { yoteiBtnRef = el; }}
             class={
-              "fixed z-50 " +
+              "settings-button-transition fixed z-50 " +
               (isLandscape()
                 ? (mergedVisible()
                     ? "left-[82%] top-2 -translate-x-1/2"
@@ -95,7 +92,6 @@ const SettingsPanel: Component = () => {
               " " + btnClass
             }
             style={{
-              transition: moveTransition + ", " + dimTransition,
               opacity: buttonsDimmed() ? 0.08 : 1,
               "view-transition-name": MORPHING_SLOT.LEFT,
             }}
@@ -123,7 +119,7 @@ const SettingsPanel: Component = () => {
               縦横アニメ用に left+top+transform で統一、長押しで連続 */}
           <button
             class={
-              "fixed z-50 " +
+              "settings-button-transition fixed z-50 " +
               (isLandscape()
                 ? (mergedVisible()
                     ? "left-[82%] top-[calc(100%-0.5rem)] -translate-x-1/2 -translate-y-full"
@@ -135,7 +131,6 @@ const SettingsPanel: Component = () => {
             }
             style={{
               "touch-action": "none",
-              transition: moveTransition + ", " + dimTransition,
               opacity: buttonsDimmed() ? 0.08 : 1,
               "view-transition-name": MORPHING_SLOT.RIGHT,
             }}

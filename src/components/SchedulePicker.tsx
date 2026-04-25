@@ -13,6 +13,7 @@ import { setScheduleAt } from "../features/schedule/state";
 import { rotateMinutes } from "../features/free-rotation/state";
 import { useIsTablet } from "../hooks/useIsTablet";
 import { useI18n, type TKey } from "../i18n";
+import { animateMotion, motionAllowed } from "../lib/motion";
 
 /**
  * 予定アイコン選択用リングメニュー。
@@ -140,8 +141,8 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
   const onPointerUp = (e: PointerEvent) => {
     dragStart = null;
     // touch flick で離した瞬間: 直近の平均速度から慣性ループ開始
-    // (mouse/pen は慣性なし。ホイールで操作する想定)
-    if (e.pointerType === "touch" && velocityHistory.length > 0) {
+    // (mouse/pen は慣性なし。ホイールで操作する想定。reduce-motion 中もスキップ)
+    if (e.pointerType === "touch" && motionAllowed() && velocityHistory.length > 0) {
       const totalDeg = velocityHistory.reduce((s, h) => s + h.deltaDeg, 0);
       const oldest = velocityHistory[0]!.time;
       const span = performance.now() - oldest || 1;
@@ -239,13 +240,15 @@ const RingIcon: Component<{
 
   // 開始時アニメ: タップ位置 (origin) → 最終位置 + scale 0 → 1 + opacity 0 → 1
   // stagger は index * STAGGER_MS で、12時から CW に順次出現する
+  // (reduce-motion 中は animateMotion が null を返してアニメスキップ → アイコンは最終位置に即出現)
   onMount(() => {
     if (!buttonRef) return;
     const startTransform =
       `translate(${props.origin.x - props.iconSize / 2}px, ${props.origin.y - props.iconSize / 2}px) scale(0)`;
     const endTransform =
       `translate(${finalPos().x - props.iconSize / 2}px, ${finalPos().y - props.iconSize / 2}px) scale(1)`;
-    buttonRef.animate(
+    animateMotion(
+      buttonRef,
       [
         { transform: startTransform, opacity: 0 },
         { transform: endTransform, opacity: 1 },

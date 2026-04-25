@@ -155,7 +155,7 @@ export const ClockLayout: Component = () => {
         <div
           ref={amWrapperRef}
           class={
-            "relative flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 " +
+            "clock-wrapper-transition relative flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 " +
             (isLandscape() ? "-mr-3" : "-mb-3")
           }
           style={{
@@ -166,9 +166,8 @@ export const ClockLayout: Component = () => {
             //   - 通常 → 1
             // ここで一括にかけることで、ClockFace / ScheduleLayer / HandsLayer が
             // すべて同じ opacity の影響を受ける。
+            // transition は .clock-wrapper-transition class 経由 (reduce-motion 対応のため)。
             opacity: mergedVisible() ? 0 : (isAm() ? 1 : 0.25),
-            transition:
-              "transform 560ms cubic-bezier(.34,1.56,.64,1), opacity 380ms ease, filter 380ms ease",
             filter: splitShadow(transitioning()),
             "will-change": transitioning() ? "transform, opacity" : "auto",
           }}
@@ -192,15 +191,14 @@ export const ClockLayout: Component = () => {
         <div
           ref={pmWrapperRef}
           class={
-            "relative flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 " +
+            "clock-wrapper-transition relative flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 " +
             (isLandscape() ? "-ml-3" : "-mt-3")
           }
           style={{
             transform: pmTransform(mergedVisible(), isLandscape()),
             // AM と対称: PM 非アクティブ (= AM プレビュー長押し中) で 0.25 に薄く
+            // transition は .clock-wrapper-transition class 経由 (reduce-motion 対応のため)。
             opacity: mergedVisible() ? 0 : (isAm() ? 0.25 : 1),
-            transition:
-              "transform 560ms cubic-bezier(.34,1.56,.64,1), opacity 380ms ease, filter 380ms ease",
             filter: splitShadow(transitioning()),
             "will-change": transitioning() ? "transform, opacity" : "auto",
           }}
@@ -222,15 +220,14 @@ export const ClockLayout: Component = () => {
       <Show when={mergedVisible() || transitioning()}>
         <div
           class={
-            "absolute inset-0 flex items-center justify-center pointer-events-none " +
+            "clock-merged-container-transition absolute inset-0 flex items-center justify-center pointer-events-none " +
             (isLandscape() ? "flex-row" : "flex-col")
           }
           style={{
+            // transition は .clock-merged-container-transition class 経由 (reduce-motion 対応のため)。
             opacity: mergedVisible() ? 1 : 0,
             transform: mergedTransform(mergedVisible()),
             "transform-origin": "center",
-            transition:
-              "opacity 380ms ease, transform 560ms cubic-bezier(.34,1.56,.64,1), filter 380ms ease",
             filter: splitShadow(transitioning()),
             "will-change": transitioning() ? "transform, opacity" : "auto",
           }}

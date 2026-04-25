@@ -89,3 +89,40 @@ button[aria-label]::before {
 ::view-transition-new(root) {
   animation: none;
 }
+
+/* ===== ClockLayout / SettingsPanel の transition 群を class 化 =====
+   inline style だと @media query で消せないので、prefers-reduced-motion 対応のために
+   class に切り出している。class 自体は常時適用され、デフォルトの transition を持つ。
+   reduce-motion 時のみ後段の body.motion-reduce ルールで transition: none に上書き。 */
+.clock-wrapper-transition {
+  transition: transform 560ms cubic-bezier(.34, 1.56, .64, 1),
+              opacity 380ms ease,
+              filter 380ms ease;
+}
+.clock-merged-container-transition {
+  transition: opacity 380ms ease,
+              transform 560ms cubic-bezier(.34, 1.56, .64, 1),
+              filter 380ms ease;
+}
+.settings-button-transition {
+  transition: top 560ms cubic-bezier(.34, 1.56, .64, 1),
+              left 560ms cubic-bezier(.34, 1.56, .64, 1),
+              right 560ms cubic-bezier(.34, 1.56, .64, 1),
+              bottom 560ms cubic-bezier(.34, 1.56, .64, 1),
+              transform 150ms ease,
+              opacity 100ms ease;
+}
+
+/* ===== prefers-reduced-motion: reduce 対応 (アクセシビリティ) =====
+   src/lib/motion-bootstrap.ts が body に motion-reduce class を付けた時のみ有効化。
+   そのコードを index.tsx で import している 1 行を消せばこのブロック全体が dormant になる
+   (= class が付かないので何も上書きしない)。 */
+body.motion-reduce .clock-wrapper-transition,
+body.motion-reduce .clock-merged-container-transition,
+body.motion-reduce .settings-button-transition {
+  transition: none;
+}
+body.motion-reduce ::view-transition-old(*),
+body.motion-reduce ::view-transition-new(*) {
+  animation: none;
+}
