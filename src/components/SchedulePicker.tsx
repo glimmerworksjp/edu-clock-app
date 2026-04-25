@@ -289,6 +289,9 @@ const RingIcon: Component<{
         height: `${props.iconSize}px`,
         "font-size": `${props.iconFont}px`,
         transform: transform(),
+        // 各アイコンを compositing layer に固定 (mount 時から確保)。回転中の transform 更新は
+        // composite のみで完結し、初回 promote によるカクつきも消える
+        "will-change": "transform",
       }}
       onClick={onClick}
       aria-label={t(`schedule.icon.${props.icon.id}` as TKey)}
