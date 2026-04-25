@@ -57,6 +57,11 @@ const TRI_HEIGHT = 2.5;
 
 /** インタラクション関連 */
 const LONG_PRESS_MS = 500;
+/** タップ判定領域: 視認可能な白円の外側に追加するバッファ (viewBox 単位)。
+   子どもの指でも押しやすくするため、透明の円で touch 範囲を拡げる。 */
+const ICON_TOUCH_BUFFER = 10;
+/** ✕ボタンのタップ判定半径 (viewBox 単位)。視認可能な赤円 (TRASH_RADIUS=7) より大きめ。 */
+const TRASH_TOUCH_RADIUS = 18;
 
 /** ポヨン3 (3 段の高速バウンス): クリック時 + マッチ window 入り口の one-shot で共通 */
 const POYON3_DURATION_MS = 400;
@@ -233,6 +238,14 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
                 if (a && a.type === "warning") triggerDelete(a.minutes);
               }}
             >
+              {/* 透明のタップ判定円: 視認できる赤円より大きい。EventIcon と同じ理由 */}
+              <circle
+                cx={pos().x}
+                cy={pos().y}
+                r={TRASH_TOUCH_RADIUS}
+                fill="transparent"
+                style={{ "pointer-events": "all" }}
+              />
               <circle cx={pos().x} cy={pos().y} r={TRASH_RADIUS + 1} fill="#C01030" />
               <circle cx={pos().x} cy={pos().y} r={TRASH_RADIUS} fill="#FF4060" />
               {/* ✕ 印は line ペアで描く (text の "✕" よりクロス角度がきれい) */}
@@ -432,6 +445,16 @@ const EventIcon: Component<EventIconProps> = (props) => {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       >
+        {/* 透明のタップ判定円: 視認できる白円より大きく、子どもの指でも当てやすくする。
+            最初に置くことで pointer event は受けるが、視覚的には後から重なる白円/絵文字/三角の下になる。
+            pointer-events: all で透明領域でもヒットする (デフォルト visiblePainted は alpha 0 でヒットしない) */}
+        <circle
+          cx={props.pos.x}
+          cy={props.pos.y}
+          r={props.iconBgRadius + ICON_TOUCH_BUFFER}
+          fill="transparent"
+          style={{ "pointer-events": "all" }}
+        />
         <circle
           cx={props.pos.x}
           cy={props.pos.y}
