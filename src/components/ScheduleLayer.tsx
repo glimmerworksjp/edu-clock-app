@@ -134,13 +134,13 @@ const isWithinMatchWindow = (displayed: number, eventM: number): boolean => {
  *  ポヨポヨ window と分離してあるのは、目的が違うため:
  *    - ポヨポヨ = 発生直前の "アニメで気を引く" → 短く狭い (数分)
  *    - 見える   = "もうすぐ来る" の予告 → ポヨポヨより広く取れる
- *  特例: お昼休み相当の 12:00〜12:30 (= 720..750 分) の予定だけは 30 分前から表示し、
- *  「もうすぐお昼」を分かりやすく予告する。撤去はこの三項演算子を消して固定値に戻すだけ。 */
+ *  特例: お昼休み相当の 12:00〜12:59 (= 720..779 分、正午台 1 時間) の予定だけは 59 分前から
+ *  表示し、「もうすぐお昼」を分かりやすく予告する。撤去はこの三項演算子を消して固定値に戻すだけ。 */
 const VISIBILITY_WINDOW_MINUTES_BEFORE = 2;
-const VISIBILITY_WINDOW_MINUTES_BEFORE_LUNCH_BAND = 30;
+const VISIBILITY_WINDOW_MINUTES_BEFORE_LUNCH_BAND = 59;
 const isWithinVisibilityWindow = (displayed: number, eventM: number): boolean => {
   const diff = wrapMinuteDiff(displayed - eventM);
-  const before = (eventM >= 720 && eventM <= 750)
+  const before = (eventM >= 720 && eventM <= 779)
     ? VISIBILITY_WINDOW_MINUTES_BEFORE_LUNCH_BAND
     : VISIBILITY_WINDOW_MINUTES_BEFORE;
   return diff >= -before && diff <= 0;
