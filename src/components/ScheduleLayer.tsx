@@ -279,8 +279,11 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
         </For>
 
         {/* warning 中: SVG 全面の透明 rect で外タップを拾ってキャンセル。
-            アイコンより後の document order で上に乗せる (= 下のアイコンへの pointer は届かない)。 */}
-        <Show when={interaction().type === "warning"}>
+            アイコンより後の document order で上に乗せる (= 下のアイコンへの pointer は届かない)。
+            warning event がこのレイヤーに属する場合のみ描画する。両レイヤーで描画してしまうと、
+            merged モードで重なった「dim 側」の予定の ✕ ボタンが、上のレイヤーの cancel rect に
+            覆われて押せなくなる (= dim 側の予定が削除できない)。 */}
+        <Show when={activeInThisLayer()?.type === "warning"}>
           <rect
             x={0} y={0} width={VIEW} height={VIEW}
             fill="transparent"
