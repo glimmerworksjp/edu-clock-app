@@ -126,6 +126,15 @@ body.chronostasis .star-twinkle {
               transform 150ms ease,
               opacity 100ms ease;
 }
+/* AM/PM 切替時の dim 透明度 transition (= 元 .clock-wrapper-transition の opacity と同期)。
+   ClockLayout 側で ClockFace/HandsLayer を包む div、ScheduleLayer 内の各 EventIcon の <g> に付与。
+   親に .opacity-instant が付いている時 (AM/PM プレビュー長押し中) は子側も 0ms 即時切替。 */
+.fade-on-dim {
+  transition: opacity 380ms ease;
+}
+.opacity-instant .fade-on-dim {
+  transition: opacity 0ms;
+}
 
 /* ===== prefers-reduced-motion: reduce 対応 (アクセシビリティ) =====
    src/lib/motion-bootstrap.ts が body に motion-reduce class を付けた時のみ有効化。
@@ -134,7 +143,9 @@ body.chronostasis .star-twinkle {
 body.motion-reduce .clock-wrapper-transition,
 body.motion-reduce .clock-wrapper-transition.opacity-instant,
 body.motion-reduce .clock-merged-container-transition,
-body.motion-reduce .settings-button-transition {
+body.motion-reduce .settings-button-transition,
+body.motion-reduce .fade-on-dim,
+body.motion-reduce .opacity-instant .fade-on-dim {
   transition: none;
 }
 body.motion-reduce ::view-transition-old(*),

@@ -130,6 +130,14 @@ export const ClockLayout: Component = () => {
   const { mergedVisible, transitioning } = useMergeAnimation();
   useAutoRotateTick();
 
+  // ClockFace / HandsLayer 用の dim opacity (3 状態合成):
+  //   - merged 表示中 → 0 (split 時計は隠す)
+  //   - 反対側プレビュー長押し中 → 0.25 (薄く)
+  //   - 通常 → 1
+  // ScheduleLayer は dim 階層の外に置いて、内部で event ごとに opacity を決める (window 内は dim 無視)。
+  const amDimOpacity = createMemo(() => mergedVisible() ? 0 : (isAm() ? 1 : 0.25));
+  const pmDimOpacity = createMemo(() => mergedVisible() ? 0 : (isAm() ? 0.25 : 1));
+
   return (
     <div class="w-full h-full overflow-hidden relative">
       {/* 空背景 (自由回転時のみ) */}
@@ -164,14 +172,10 @@ export const ClockLayout: Component = () => {
           classList={{ "opacity-instant": previewFlipped() }}
           style={{
             transform: amTransform(mergedVisible(), isLandscape()),
-            // opacity は3つの状態を合成:
-            //   - merged 表示中 → 0 (split 時計は隠す)
-            //   - PM プレビュー長押し中 (= AM 非アクティブ) → 0.25 (薄く)
-            //   - 通常 → 1
-            // ここで一括にかけることで、ClockFace / ScheduleLayer / HandsLayer が
-            // すべて同じ opacity の影響を受ける。
-            // transition は .clock-wrapper-transition class 経由 (reduce-motion 対応のため)。
-            opacity: mergedVisible() ? 0 : (isAm() ? 1 : 0.25),
+            // wrapper 自身の opacity は外した: ClockFace / HandsLayer は内側 dim div で個別に薄く、
+            // ScheduleLayer は dim 階層の外に置いて event ごとに opacity を制御する。
+            // これで「window 内の予定」は薄い側 (PM プレビュー時の AM など) でもハッキリ見える。
+            // .opacity-instant 中は子の .fade-on-dim が CSS セレクタで 0ms 即時切替に上書きされる。
             filter: splitShadow(transitioning()),
             "will-change": transitioning() ? "transform, opacity" : "auto",
           }}
@@ -181,13 +185,23 @@ export const ClockLayout: Component = () => {
                 - 自由回転 manual のドラッグ中は反対側 (= !isAm) を隠して合成負荷軽減
               ClockFace / ScheduleLayer / HandsLayer 全部にこの条件を適用する。 */}
           <Show when={(!mergedVisible() || transitioning()) && (isAm() || !dragging())}>
-            <ClockFace period="am" hours={amTime().hours} />
-            {/* 予定アイコンは更に merge transition 中も外す (620ms の窓) */}
+            {/* dim 対象 (= ClockFace) を 1 つの div で包んで個別 opacity transition */}
+            <div class="absolute inset-0 fade-on-dim" style={{ opacity: amDimOpacity() }}>
+              <ClockFace period="am" hours={amTime().hours} />
+            </div>
+            {/* 予定アイコンは dim 階層の外。merge transition 中は外す (620ms の窓) */}
             <Show when={!transitioning()}>
-              <ScheduleLayer period="am" displayedMinutes={displayedMinutesTotal()} />
+              <ScheduleLayer
+                period="am"
+                dimmed={!isAm()}
+                mergedHidden={mergedVisible()}
+                displayedMinutes={displayedMinutesTotal()}
+              />
             </Show>
-            {/* 針は予定アイコンの上に乗せる */}
-            <HandsLayer hours={amTime().hours} minutes={amTime().minutes} />
+            {/* 針は予定アイコンの上に乗せる (DOM order が後ろ = z 上) */}
+            <div class="absolute inset-0 fade-on-dim" style={{ opacity: amDimOpacity() }}>
+              <HandsLayer hours={amTime().hours} minutes={amTime().minutes} />
+            </div>
           </Show>
         </div>
 
@@ -201,20 +215,28 @@ export const ClockLayout: Component = () => {
           classList={{ "opacity-instant": previewFlipped() }}
           style={{
             transform: pmTransform(mergedVisible(), isLandscape()),
-            // AM と対称: PM 非アクティブ (= AM プレビュー長押し中) で 0.25 に薄く
-            // transition は .clock-wrapper-transition class 経由 (reduce-motion 対応のため)。
-            opacity: mergedVisible() ? 0 : (isAm() ? 0.25 : 1),
+            // AM と対称。wrapper 自身の opacity は外し、ClockFace/HandsLayer は内側 dim div で薄く、
+            // ScheduleLayer は外で event ごとに制御する (= window 内 event は薄い側でもハッキリ)。
             filter: splitShadow(transitioning()),
             "will-change": transitioning() ? "transform, opacity" : "auto",
           }}
         >
           {/* PM 側 (AM 側と対称) */}
           <Show when={(!mergedVisible() || transitioning()) && (!isAm() || !dragging())}>
-            <ClockFace period="pm" hours={pmTime().hours} />
+            <div class="absolute inset-0 fade-on-dim" style={{ opacity: pmDimOpacity() }}>
+              <ClockFace period="pm" hours={pmTime().hours} />
+            </div>
             <Show when={!transitioning()}>
-              <ScheduleLayer period="pm" displayedMinutes={displayedMinutesTotal()} />
+              <ScheduleLayer
+                period="pm"
+                dimmed={isAm()}
+                mergedHidden={mergedVisible()}
+                displayedMinutes={displayedMinutesTotal()}
+              />
             </Show>
-            <HandsLayer hours={pmTime().hours} minutes={pmTime().minutes} />
+            <div class="absolute inset-0 fade-on-dim" style={{ opacity: pmDimOpacity() }}>
+              <HandsLayer hours={pmTime().hours} minutes={pmTime().minutes} />
+            </div>
           </Show>
         </div>
       </div>
@@ -246,20 +268,22 @@ export const ClockLayout: Component = () => {
             <ClockFace period="merged" hours={displayed().hours} />
             {/* 重ね表示中: AM/PM 両方のレイヤーをこの盤面に投影。
                 現在の period (displayed().hours < 12) を上 + 不透明、もう片方は強めに薄く後ろ。
+                後ろレイヤーは dimmed + dimOpacity={0.15} で event-level に薄くするので、
+                window 内の予定 (= もうすぐ起きる予定) はハッキリ見える。
                 merge transition 中は AM/PM 二重描画 + 合成負荷を避けるため一時的に外す。 */}
             <Show when={!transitioning()}>
               <Show
                 when={displayed().hours < 12}
                 fallback={<>
-                  <ScheduleLayer period="am" opacity={0.15} scale={0.85} zIndex={1}
+                  <ScheduleLayer period="am" dimmed dimOpacity={0.15} scale={0.85} zIndex={1}
                     displayedMinutes={displayedMinutesTotal()} />
-                  <ScheduleLayer period="pm" opacity={1} zIndex={2}
+                  <ScheduleLayer period="pm" zIndex={2}
                     displayedMinutes={displayedMinutesTotal()} />
                 </>}
               >
-                <ScheduleLayer period="pm" opacity={0.15} scale={0.85} zIndex={1}
+                <ScheduleLayer period="pm" dimmed dimOpacity={0.15} scale={0.85} zIndex={1}
                   displayedMinutes={displayedMinutesTotal()} />
-                <ScheduleLayer period="am" opacity={1} zIndex={2}
+                <ScheduleLayer period="am" zIndex={2}
                   displayedMinutes={displayedMinutesTotal()} />
               </Show>
             </Show>

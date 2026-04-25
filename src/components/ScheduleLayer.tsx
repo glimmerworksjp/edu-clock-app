@@ -33,10 +33,19 @@ import { animateMotion } from "../lib/motion";
 
 interface ScheduleLayerProps {
   period: "am" | "pm";
-  opacity?: number;
   zIndex?: number;
   /** レイヤー全体のスケール (1 で等倍)。merged β 表示の後ろレイヤーで奥行きを出す用。 */
   scale?: number;
+  /** レイヤー全体に直接かける opacity (= wrapper div の opacity)。
+   *  merged β 表示の後ろレイヤーを薄くする等の用途。指定時は event-level の dimmed/mergedHidden より優先。 */
+  opacity?: number;
+  /** 親側が薄い側 (= 反対 period のプレビュー中、merged β の後ろレイヤー等) ならば true。
+   *  window 外の event は dimOpacity に薄く、window 内の event は dim 無視で 1.0 に保つ。 */
+  dimmed?: boolean;
+  /** dimmed=true 時の event 薄さ (default 0.25)。merged β 後ろは 0.15 等で奥行きを強める。 */
+  dimOpacity?: number;
+  /** merge 表示中 (= 中央 1 つの時計、AM/PM 分割は隠す) ならば true。全 event を opacity 0 に。 */
+  mergedHidden?: boolean;
   /** 現在表示中の時刻 (0..1439 の整数、分単位)。一致するイベントは continuous でポヨンポヨンする */
   displayedMinutes: number;
 }
@@ -100,13 +109,41 @@ const POOF_DURATION_MS = 900;
  * 自動回転 (60 分/秒) では 3 分 = 50ms しか窓が開かないので、入った瞬間に
  * 別途 one-shot ポヨン3 をトリガーして可視性を担保する (continuous loop だけだと描画が間に合わない)。
  */
-const MATCH_WINDOW_MINUTES_BEFORE = 2;
-const isWithinMatchWindow = (displayed: number, eventM: number): boolean => {
-  // 0/1440 を跨ぐラップアラウンドを正規化
-  let diff = displayed - eventM;
+/** displayed - eventM の差を [-720, 720] に正規化 (0/1440 跨ぎ対応)。 */
+const wrapMinuteDiff = (diff: number): number => {
   while (diff > 720) diff -= 1440;
   while (diff < -720) diff += 1440;
-  return diff >= -MATCH_WINDOW_MINUTES_BEFORE && diff <= 0;
+  return diff;
+};
+
+/** ポヨポヨアニメ用 window (= EventIcon の isMatched 判定)。
+ *  通常 2 分前から、ただし天頂位置 (AM 0:00 / PM 12:00) のみ 5 分前から (AM/PM 境目を強調)。
+ *  撤去 (天頂特例だけ): MATCH_WINDOW_MINUTES_BEFORE_NOON の三項演算子を消して
+ *  before を MATCH_WINDOW_MINUTES_BEFORE 固定に戻すだけ。 */
+const MATCH_WINDOW_MINUTES_BEFORE = 2;
+const MATCH_WINDOW_MINUTES_BEFORE_NOON = 5;
+const isWithinMatchWindow = (displayed: number, eventM: number): boolean => {
+  const diff = wrapMinuteDiff(displayed - eventM);
+  const before = (eventM === 0 || eventM === 720)
+    ? MATCH_WINDOW_MINUTES_BEFORE_NOON
+    : MATCH_WINDOW_MINUTES_BEFORE;
+  return diff >= -before && diff <= 0;
+};
+
+/** 「dim 側でもハッキリ見せる」用 window (= eventOpacity の判定)。
+ *  ポヨポヨ window と分離してあるのは、目的が違うため:
+ *    - ポヨポヨ = 発生直前の "アニメで気を引く" → 短く狭い (数分)
+ *    - 見える   = "もうすぐ来る" の予告 → ポヨポヨより広く取れる
+ *  特例: お昼休み相当の 12:00〜12:30 (= 720..750 分) の予定だけは 30 分前から表示し、
+ *  「もうすぐお昼」を分かりやすく予告する。撤去はこの三項演算子を消して固定値に戻すだけ。 */
+const VISIBILITY_WINDOW_MINUTES_BEFORE = 2;
+const VISIBILITY_WINDOW_MINUTES_BEFORE_LUNCH_BAND = 30;
+const isWithinVisibilityWindow = (displayed: number, eventM: number): boolean => {
+  const diff = wrapMinuteDiff(displayed - eventM);
+  const before = (eventM >= 720 && eventM <= 750)
+    ? VISIBILITY_WINDOW_MINUTES_BEFORE_LUNCH_BAND
+    : VISIBILITY_WINDOW_MINUTES_BEFORE;
+  return diff >= -before && diff <= 0;
 };
 
 /** 削除ボタン (✕ 印の赤い丸吹き出し) */
@@ -186,11 +223,23 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
     return { x: iconPos.x + TRASH_OFFSET, y: iconPos.y - TRASH_OFFSET };
   });
 
+  // event ごとの opacity 決定。引数の visibleInDim は "dim 側でもハッキリ見せたいか" の判定結果
+  // (= isWithinVisibilityWindow)。ポヨポヨ window とは別概念で広めに取られている。
+  //   mergedHidden       → 全部 0 (merge transition 中で分割表示を隠す)
+  //   dimmed && !visible → dimOpacity (薄い側で予告外の予定)
+  //   dimmed && visible  → 1.0 (薄い側でも "もうすぐ起きる予定" はハッキリ見せる)
+  //   !dimmed            → 1.0 (アクティブ側は全 event 通常表示)
+  const eventOpacity = (visibleInDim: boolean): number => {
+    if (props.mergedHidden) return 0;
+    if (visibleInDim || !props.dimmed) return 1;
+    return props.dimOpacity ?? 0.25;
+  };
+
   return (
     <div
       class="absolute inset-0 flex items-center justify-center pointer-events-none"
       style={{
-        opacity: props.opacity ?? 1,
+        opacity: props.opacity,
         "z-index": props.zIndex,
         transform: props.scale != null && props.scale !== 1 ? `scale(${props.scale})` : undefined,
       }}
@@ -209,6 +258,7 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
               iconBgRadius={iconBgRadius()}
               iconFontSize={iconFontSize()}
               isMatched={isWithinMatchWindow(props.displayedMinutes, event.minutes)}
+              opacity={eventOpacity(isWithinVisibilityWindow(props.displayedMinutes, event.minutes))}
             />
           )}
         </For>
@@ -288,6 +338,9 @@ interface EventIconProps {
   iconFontSize: number;
   /** 現在の displayed time がこのイベント時刻と一致しているか (連続ポヨンポヨン用) */
   isMatched: boolean;
+  /** ScheduleLayer が決めたこの event 単体の表示 opacity (0..1)。
+   *  .fade-on-dim class で 380ms transition される (親 .opacity-instant 中は 0ms)。 */
+  opacity: number;
 }
 
 const EventIcon: Component<EventIconProps> = (props) => {
@@ -436,12 +489,14 @@ const EventIcon: Component<EventIconProps> = (props) => {
     <Show when={def()}>
       <g
         ref={groupRef}
+        class="fade-on-dim"
         style={{
           // bbox 中心を transform 原点にすることで、回転/拡縮がアイコン中心まわりで起きる
           "transform-box": "fill-box",
           "transform-origin": "center",
           "pointer-events": "auto",
           cursor: "pointer",
+          opacity: props.opacity,
         }}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
