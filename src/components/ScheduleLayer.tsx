@@ -133,18 +133,27 @@ const isWithinMatchWindow = (displayed: number, eventM: number): boolean => {
 /** 「dim 側でもハッキリ見せる」用 window (= eventOpacity の判定)。
  *  ポヨポヨ window と分離してあるのは、目的が違うため:
  *    - ポヨポヨ = 発生直前の "アニメで気を引く" → 短く狭い (数分)
- *    - 見える   = "もうすぐ来る" の予告 → ポヨポヨより広く取れる
- *  特例: お昼休み相当の 12:00〜12:59 (= 720..779 分、正午台 1 時間) の予定だけは 59 分前から
- *  表示し、「もうすぐお昼」を分かりやすく予告する。撤去はこの三項演算子を消して固定値に戻すだけ。 */
+ *    - 見える   = "もうすぐ来る" の予告 → ポヨポヨより広く取れる */
 const VISIBILITY_WINDOW_MINUTES_BEFORE = 2;
-const VISIBILITY_WINDOW_MINUTES_BEFORE_LUNCH_BAND = 59;
 const isWithinVisibilityWindow = (displayed: number, eventM: number): boolean => {
   const diff = wrapMinuteDiff(displayed - eventM);
-  const before = (eventM >= 720 && eventM <= 779)
-    ? VISIBILITY_WINDOW_MINUTES_BEFORE_LUNCH_BAND
-    : VISIBILITY_WINDOW_MINUTES_BEFORE;
-  return diff >= -before && diff <= 0;
+  return diff >= -VISIBILITY_WINDOW_MINUTES_BEFORE && diff <= 0;
 };
+
+/** お昼予定 (12:00〜12:59) の特例ルール: 絶対時刻ベースで visible/dim を判定する。
+ *  通常 event は active 側 / dim 側 の二値で opacity が決まるが、お昼予定だけは時計画面の
+ *  絶対時刻で「お昼の準備期間 / お昼 / 余韻」(= 06:01〜17:59) の間は常に opacity 1、それ以外
+ *  (= 18:00〜翌朝 06:00) は dimOpacity に上書きする。
+ *  → "まだ遠い"・"もう過ぎた" 予定を active 側でも特例で薄く見せられる。
+ *  撤去するなら eventOpacity 内の `isLunchEvent` 分岐 3 行を消すだけで通常ロジックに戻る。 */
+const LUNCH_EVENT_MINUTES_START = 720;  // 12:00
+const LUNCH_EVENT_MINUTES_END = 779;    // 12:59
+const LUNCH_VISIBLE_HOURS_START = 361;  // 06:01
+const LUNCH_VISIBLE_HOURS_END = 1079;   // 17:59
+const isLunchEvent = (eventM: number): boolean =>
+  eventM >= LUNCH_EVENT_MINUTES_START && eventM <= LUNCH_EVENT_MINUTES_END;
+const isInLunchVisibleHours = (displayed: number): boolean =>
+  displayed >= LUNCH_VISIBLE_HOURS_START && displayed <= LUNCH_VISIBLE_HOURS_END;
 
 /** 削除ボタン (✕ 印の赤い丸吹き出し) */
 const TRASH_OFFSET = 10;
@@ -226,11 +235,15 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
   // event ごとの opacity 決定。引数の visibleInDim は "dim 側でもハッキリ見せたいか" の判定結果
   // (= isWithinVisibilityWindow)。ポヨポヨ window とは別概念で広めに取られている。
   //   mergedHidden       → 全部 0 (merge transition 中で分割表示を隠す)
+  //   お昼予定特例       → 絶対時刻 06:01〜17:59 のみ 1、それ以外は dimOpacity (active 側も上書き)
   //   dimmed && !visible → dimOpacity (薄い側で予告外の予定)
   //   dimmed && visible  → 1.0 (薄い側でも "もうすぐ起きる予定" はハッキリ見せる)
   //   !dimmed            → 1.0 (アクティブ側は全 event 通常表示)
-  const eventOpacity = (visibleInDim: boolean): number => {
+  const eventOpacity = (visibleInDim: boolean, eventM: number): number => {
     if (props.mergedHidden) return 0;
+    if (isLunchEvent(eventM)) {
+      return isInLunchVisibleHours(props.displayedMinutes) ? 1 : (props.dimOpacity ?? 0.25);
+    }
     if (visibleInDim || !props.dimmed) return 1;
     return props.dimOpacity ?? 0.25;
   };
@@ -258,7 +271,10 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
               iconBgRadius={iconBgRadius()}
               iconFontSize={iconFontSize()}
               isMatched={isWithinMatchWindow(props.displayedMinutes, event.minutes)}
-              opacity={eventOpacity(isWithinVisibilityWindow(props.displayedMinutes, event.minutes))}
+              opacity={eventOpacity(
+                isWithinVisibilityWindow(props.displayedMinutes, event.minutes),
+                event.minutes,
+              )}
             />
           )}
         </For>
