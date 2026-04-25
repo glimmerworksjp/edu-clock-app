@@ -1,6 +1,6 @@
 import { createEffect, on, onCleanup, untrack } from "solid-js";
 import { rotateActive, rotateMinutes, rotateMode, seekRotate } from "./state";
-import { clockFrozen } from "../freeze";
+import { useChronostasis } from "../../lib/chronostasis-solid";
 
 /**
  * 自動回転 (じどうかいてん): 1日 ≒ 24 秒で時刻を進める。
@@ -21,9 +21,10 @@ const MIN_PER_MS = 1440 / 24000;
  * ON/OFF 切り替えと cleanup は自動で処理される。
  */
 export const useAutoRotateTick = () => {
+  const inChronostasis = useChronostasis();
   createEffect(
     on(
-      () => rotateActive() && rotateMode() === "auto" && !clockFrozen(),
+      () => rotateActive() && rotateMode() === "auto" && !inChronostasis(),
       (running) => {
         if (!running) return;
         let last = performance.now();
