@@ -191,15 +191,15 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
 
   onCleanup(() => cancelInertia());
 
+  // 暗幕背景は backdrop-filter: blur(2px) + 半透明黒の overlay。
+  // open 中は features/freeze の clockFrozen() で時計画面の動的要素 (秒バー / hands /
+  // 太陽月 / 自動回転 / 星 twinkle) が全て止まるので、blur は 1 回 paint されたら以降は
+  // ブラウザの compositing layer cache に乗って合成負荷ゼロ → 古い端末でも実用負荷で動く。
   return (
     <div
-      class="fixed inset-0 z-[100]"
+      class="fixed inset-0 z-[100] backdrop-blur-[2px]"
       style={{
-        // ringRadius 付近だけが明るくて中も外も暗いドーナツ型スポットライト。
-        // 内側を暗くするのは「中央の時計が透けて見えて視覚干渉でカクついて見える」
-        // 問題への対策、外側を暗くするのは普通のフォーカス。リングが浮き上がる演出。
-        // backdrop-filter: blur を使わないので合成負荷ゼロ (回転中も静的、再 paint なし)
-        background: `radial-gradient(circle at ${props.origin.x}px ${props.origin.y}px, rgba(0,0,0,0.78) 0px, rgba(0,0,0,0.78) ${Math.max(0, ringRadius() - iconSize())}px, rgba(0,0,0,0.18) ${ringRadius()}px, rgba(0,0,0,0.78) ${ringRadius() + iconSize()}px, rgba(0,0,0,0.88) 2000px)`,
+        background: "rgba(0,0,0,0.4)",
         "touch-action": "none",
       }}
       onPointerDown={onPointerDown}

@@ -1,5 +1,6 @@
 import { createEffect, on, onCleanup, untrack } from "solid-js";
 import { rotateActive, rotateMinutes, rotateMode, seekRotate } from "./state";
+import { clockFrozen } from "../freeze";
 
 /**
  * 自動回転 (じどうかいてん): 1日 ≒ 24 秒で時刻を進める。
@@ -22,7 +23,7 @@ const MIN_PER_MS = 1440 / 24000;
 export const useAutoRotateTick = () => {
   createEffect(
     on(
-      () => rotateActive() && rotateMode() === "auto",
+      () => rotateActive() && rotateMode() === "auto" && !clockFrozen(),
       (running) => {
         if (!running) return;
         let last = performance.now();

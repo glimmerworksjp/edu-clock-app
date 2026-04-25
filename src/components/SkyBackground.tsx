@@ -145,7 +145,7 @@ const SkyBackground: Component<SkyBackgroundProps> = (props) => {
           <For each={STARS}>
             {(s) => (
               <div
-                class="absolute rounded-full bg-white"
+                class="absolute rounded-full bg-white star-twinkle"
                 style={{
                   left: `${s.xPct}%`,
                   top: `${s.yPct}%`,

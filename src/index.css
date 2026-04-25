@@ -84,6 +84,13 @@ button[aria-label]::before {
   50% { opacity: 1; }
 }
 
+/* SchedulePicker open 中は body.clock-frozen が付与され、CSS animation を pause させる。
+   features/freeze.ts の useClockFreezeBodyClass() が toggle する。
+   tick 系 (setInterval / rAF) 副作用は同モジュールの clockFrozen() 観測で個別に止めている。 */
+body.clock-frozen .star-twinkle {
+  animation-play-state: paused;
+}
+
 /* View Transitions: ルート全体のcross-fadeは切り、名前付き要素だけを動かす */
 ::view-transition-old(root),
 ::view-transition-new(root) {
