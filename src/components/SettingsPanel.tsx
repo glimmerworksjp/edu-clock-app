@@ -95,7 +95,10 @@ const SettingsPanel: Component = () => {
               opacity: buttonsDimmed() ? 0.08 : 1,
               "view-transition-name": MORPHING_SLOT.LEFT,
             }}
-            onClick={() => {
+            onPointerDown={(e) => {
+              // pointerdown で即開く + preventDefault で synthesized click を抑止
+              // (overlay 上で click が発火すると closePicker race を起こすため)
+              e.preventDefault();
               if (pickerOpen()) {
                 closePicker();
                 return;
