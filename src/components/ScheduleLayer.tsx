@@ -57,39 +57,52 @@ const TRI_HEIGHT = 2.5;
 
 /** インタラクション関連 */
 const LONG_PRESS_MS = 500;
-/** ポヨンポヨンッ: 2 段バウンス。クリック時 + マッチ中の continuous loop で共通 */
-const POYON_POYON_DURATION_MS = 500;
+
+/** ポヨン3 (3 段の高速バウンス): クリック時 + マッチ window 入り口の one-shot で共通 */
+const POYON3_DURATION_MS = 400;
+const POYON3_KEYFRAMES: Keyframe[] = [
+  { transform: "scale(1)",    offset: 0 },
+  { transform: "scale(1.22)", offset: 0.13 },  // 1 段目 up
+  { transform: "scale(0.90)", offset: 0.26 },  // 1 段目 down
+  { transform: "scale(1.16)", offset: 0.43 },  // 2 段目 up
+  { transform: "scale(0.94)", offset: 0.56 },  // 2 段目 down
+  { transform: "scale(1.10)", offset: 0.74 },  // 3 段目 up
+  { transform: "scale(1)",    offset: 1 },     // 着地
+];
+
 /**
- * マッチ中の continuous loop の 1 周期。
- * 0..(POYON_POYON_DURATION_MS/MATCH_LOOP_DURATION_MS)% で 2段バウンス、残りは rest (静止)。
- * iterations: Infinity で延々繰り返す。
+ * マッチ中の continuous loop の 1 周期 (1500ms)。
+ * 0..42% に「躍動感ある」バウンス (大きめ first + わずかな rotation で揺れる感)、
+ * 42..100% は scale 1 で rest。iterations: Infinity で延々繰り返す。
  */
 const MATCH_LOOP_DURATION_MS = 1500;
+const MATCH_LOOP_KEYFRAMES: Keyframe[] = [
+  { transform: "scale(1) rotate(0deg)",     offset: 0 },
+  { transform: "scale(1.28) rotate(-3deg)", offset: 0.05 },  // 大きく速く up + 左に傾く
+  { transform: "scale(0.85) rotate(3deg)",  offset: 0.12 },  // squash + 右に傾く
+  { transform: "scale(0.88) rotate(2deg)",  offset: 0.18 },  // 一瞬の溜め
+  { transform: "scale(1.18) rotate(-2deg)", offset: 0.28 },  // 2 段目
+  { transform: "scale(0.94) rotate(0deg)",  offset: 0.36 },
+  { transform: "scale(1) rotate(0deg)",     offset: 0.42 },  // 着地
+  { transform: "scale(1) rotate(0deg)",     offset: 1 },     // rest
+];
+
 /** くるくる〜パッ: 0..65% は等速で 720° 回転 (見せ場)、65..100% で +360° 回転しながら縮小+フェード */
 const POOF_DURATION_MS = 900;
 
-/** 2 段バウンスの keyframes (offsets が 0..1) */
-const POYON_POYON_KEYFRAMES: Keyframe[] = [
-  { transform: "scale(1)", offset: 0 },
-  { transform: "scale(1.18)", offset: 0.20 },
-  { transform: "scale(0.92)", offset: 0.40 },
-  { transform: "scale(1.12)", offset: 0.60 },
-  { transform: "scale(0.96)", offset: 0.80 },
-  { transform: "scale(1)", offset: 1 },
-];
-/** continuous loop 用: 前半に 2 段バウンス、後半は scale 1 で rest */
-const MATCH_LOOP_KEYFRAMES: Keyframe[] = (() => {
-  const bouncePortion = POYON_POYON_DURATION_MS / MATCH_LOOP_DURATION_MS;  // 0.333
-  return [
-    { transform: "scale(1)", offset: 0 },
-    { transform: "scale(1.18)", offset: bouncePortion * 0.20 },
-    { transform: "scale(0.92)", offset: bouncePortion * 0.40 },
-    { transform: "scale(1.12)", offset: bouncePortion * 0.60 },
-    { transform: "scale(0.96)", offset: bouncePortion * 0.80 },
-    { transform: "scale(1)", offset: bouncePortion },
-    { transform: "scale(1)", offset: 1 },
-  ];
-})();
+/**
+ * マッチ判定の窓: event 分の 2 分前から event 分まで (= 計 3 分間 isMatched=true)。
+ * 自動回転 (60 分/秒) では 3 分 = 50ms しか窓が開かないので、入った瞬間に
+ * 別途 one-shot ポヨン3 をトリガーして可視性を担保する (continuous loop だけだと描画が間に合わない)。
+ */
+const MATCH_WINDOW_MINUTES_BEFORE = 2;
+const isWithinMatchWindow = (displayed: number, eventM: number): boolean => {
+  // 0/1440 を跨ぐラップアラウンドを正規化
+  let diff = displayed - eventM;
+  while (diff > 720) diff -= 1440;
+  while (diff < -720) diff += 1440;
+  return diff >= -MATCH_WINDOW_MINUTES_BEFORE && diff <= 0;
+};
 
 /** 削除ボタン (✕ 印の赤い丸吹き出し) */
 const TRASH_OFFSET = 10;
@@ -190,7 +203,7 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
               triPoints={trianglePointsOf(event.minutes)}
               iconBgRadius={iconBgRadius()}
               iconFontSize={iconFontSize()}
-              isMatched={props.displayedMinutes === event.minutes}
+              isMatched={isWithinMatchWindow(props.displayedMinutes, event.minutes)}
             />
           )}
         </For>
@@ -319,17 +332,33 @@ const EventIcon: Component<EventIconProps> = (props) => {
     );
   }));
 
-  // ポヨンポヨンッ (2段バウンス): タップごとに 1 回。
-  // 同じ keyframes を continuous loop でも使う (下の matchAnim 参照)。
-  const triggerPoyonPoyon = () => {
+  // ポヨン3 (高速 3 段バウンス): タップ時の即時フィードバック。
+  // マッチ window 入り口でも同じ keyframes を one-shot で投入する (下の effect 参照)。
+  const triggerPoyon3 = () => {
     if (!groupRef) return;
-    animateMotion(groupRef, POYON_POYON_KEYFRAMES, {
-      duration: POYON_POYON_DURATION_MS,
+    animateMotion(groupRef, POYON3_KEYFRAMES, {
+      duration: POYON3_DURATION_MS,
       easing: "ease-out",
     });
   };
 
-  // マッチ中の continuous ポヨンポヨン: 1 周期 = 2段バウンス + rest。延々ループ。
+  // マッチ window 入った瞬間に one-shot ポヨン3 を投入。
+  // 自動回転で window が 50ms しか開かなくても、このアニメは自分の duration (400ms) を完走する。
+  // 後の continuous loop が (composite "replace" で) 一瞬上書きするが、
+  // window 抜けて continuous が cancel されると one-shot の transform が再び見えるので可視。
+  // 注: この effect を continuous loop effect より「先に定義」しておくこと。
+  //     後発 (continuous) の方が WAAPI composite で勝ち、stopped 状態で continuous の方が見える。
+  createEffect(on(
+    () => props.isMatched,
+    (matched) => {
+      if (!groupRef || !matched) return;
+      if (isWarning() || isDeleting()) return;
+      triggerPoyon3();
+    },
+    { defer: true },
+  ));
+
+  // マッチ中の continuous: 1 周期 = 躍動感バウンス (前半 42%) + rest (後半 58%)。延々ループ。
   // warning/deleting 中は走らせない (他のアニメと干渉するため)。
   createEffect(() => {
     if (!groupRef) return;
@@ -371,7 +400,7 @@ const EventIcon: Component<EventIconProps> = (props) => {
     }
     // 長押しが先に発火していたら何もしない (既に warning に入った)
     if (!longPressed && interaction().type === "none") {
-      triggerPoyonPoyon();
+      triggerPoyon3();
     }
   };
 
