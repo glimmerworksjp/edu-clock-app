@@ -166,15 +166,17 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
   const iconBgRadius = () => iconFontSize() * ICON_BG_RADIUS_RATIO;
 
   const eventsForPeriod = createMemo<ScheduleEvent[]>(() => {
-    const all = schedule();
+    const isPm = props.period === "pm";
     const result: ScheduleEvent[] = [];
-    for (const [m, id] of Object.entries(all)) {
+    for (const [m, id] of Object.entries(schedule())) {
       const minutes = Number(m);
-      const isAm = minutes < 720;
-      if ((props.period === "am" && isAm) || (props.period === "pm" && !isAm)) {
+      if ((minutes >= 720) === isPm) {
         result.push({ minutes, iconId: id });
       }
     }
+    // 時刻 降順でソート → SVG document order の末尾 (= 最前面) に若い時刻が来る。
+    // 同位置帯で重なった時に「早い時刻が手前」の stack 表示になる。
+    result.sort((a, b) => b.minutes - a.minutes);
     return result;
   });
 
