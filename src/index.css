@@ -78,6 +78,32 @@ button[aria-label]::before {
   background: linear-gradient(160deg, #fef6e4 0%, #fce4ec 35%, #e8eaf6 65%, #e0f7fa 100%);
 }
 
+/* lang / dir 別の font stack。Latin chars 用に Nunito を先頭に残しつつ、
+   Han / Hangul / Arabic glyph はそれぞれの地域 OS 標準フォントで補完する。
+   そうしないと JA フォントや system fallback が当たって「。」位置等が
+   各地域の typographic 慣習 (台湾/HK/Macao = 中央、Mainland = 左下、
+   韓文 / Arabic 各独自) と外れる。
+   優先順は OS 標準 (PingFang / Microsoft / Apple SD Gothic Neo) → Noto
+   (Linux で noto-fonts-cjk / noto-fonts を自前 install した user 向け
+   保険) → sans-serif。Web font 化していないので bundle 増加なし。
+   i18n/index.tsx が <html lang="..." dir="..."> を locale 検出時に設定
+   するので、これらの selector が build 後の動的 page でちゃんと効く。 */
+[lang="zh-TW"] {
+  font-family: 'Nunito', 'PingFang TC', 'Heiti TC', 'Microsoft JhengHei', 'Noto Sans TC', 'Noto Sans CJK TC', sans-serif;
+}
+
+[lang="zh-CN"] {
+  font-family: 'Nunito', 'PingFang SC', 'Heiti SC', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans CJK SC', sans-serif;
+}
+
+[lang="ko"] {
+  font-family: 'Nunito', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', 'Noto Sans CJK KR', sans-serif;
+}
+
+[dir="rtl"] {
+  font-family: 'Nunito', 'Noto Sans Arabic', 'SF Arabic', 'Geeza Pro', 'Segoe UI', 'Tahoma', sans-serif;
+}
+
 /* 手回しモードの星のまたたき */
 @keyframes twinkle {
   0%, 100% { opacity: 0.4; }
