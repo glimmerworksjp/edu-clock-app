@@ -11,6 +11,7 @@ import { useCurrentTime } from "../hooks/useCurrentTime";
 import { useOrientation } from "../hooks/useOrientation";
 import { rotateActive, rotateMinutes, rotateMode, seekRotate, setRotateMode } from "../features/free-rotation/state";
 import { useAutoRotateTick } from "../features/free-rotation/auto-rotate";
+import { useIdleExitTimer } from "../features/free-rotation/idle-exit";
 import {
   useMergeAnimation,
   amTransform,
@@ -241,6 +242,7 @@ export const ClockLayout: Component = () => {
   // ===== かさね/わけ アニメーションと自動回転 =====
   const { mergedVisible, transitioning } = useMergeAnimation();
   useAutoRotateTick();
+  useIdleExitTimer();
 
   // ClockFace / HandsLayer 用の dim opacity (3 状態合成):
   //   - merged 表示中 → 0 (split 時計は隠す)
