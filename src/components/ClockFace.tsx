@@ -6,6 +6,8 @@ import { displayedFormatAt } from "../features/settings/time-format-animation";
 import { paletteId } from "../features/settings/palette";
 import { getPalette, type HourColor } from "../colors";
 import { animateMotion } from "../lib/motion";
+import { prerollKey, PULSE_MS } from "../features/settings/time-format-preroll";
+import TimeFormatPrerollFx from "./TimeFormatPrerollFx";
 
 /** 12h ⇄ 24h トグル時の 1 ポジションあたりのバウンス。
  *  各ポジションが時計回りに stagger 50ms 遅れで個別に発火するので、
@@ -221,7 +223,10 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
             const num = createMemo(() => numberAt(position));
 
             let groupRef: SVGGElement | undefined;
+            let textRef: SVGTextElement | undefined;
             let bounceAnim: Animation | null = null;
+            let pulseAnim: Animation | null = null;
+            let pulseScaleAnim: Animation | null = null;
 
             // 値が変わった瞬間にバウンス (defer で初期マウントは skip)。
             // PM 盤面のみ実質発火する: AM/merged は num が常に固定なので no-op。
@@ -232,6 +237,71 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
               bounceAnim = animateMotion(groupRef, NUMBER_BOUNCE_KEYFRAMES, {
                 duration: NUMBER_BOUNCE_DURATION_MS,
                 easing: "ease-out",
+              });
+            }, { defer: true }));
+
+            // 12 ドゥンドゥドゥンッ × 2: PM 盤面の position 0 (= てっぺんの 12) のみ。
+            // 12 は値不変で stagger bounce が走らないので、代わりに 2 サイクル分ふわっと弾ませて
+            // 「12 を足す」操作の主役だと示す。
+            //
+            // 1 サイクルの rhythm: ドゥン (中くらいの bounce) → ドゥ (やや沈み) → ドゥンッ
+            // (大きめの bounce で頂点 + snap) → 少しホールド → 完全に戻る. これを 2 回。
+            // ease-in-out で各 keyframe 間の遷移を滑らかにし、staccato じゃなく波打ち感に。
+            //
+            // 2 つの WAAPI animation を同時に走らせる:
+            //   - text  : fill を originalFill ⇄ FLASH_FILL で同期点滅 (色は属性から読んで戻す)
+            //   - group : scale を波形でアニメ (overlay 不使用、本体の <g> を膨らませる)
+            // group には既に transform-box: fill-box; transform-origin: center が当たっているので
+            // 12 と (badge mode 時の) 円が中心からふくらむ。
+            //
+            // 競合: 同 group の bounceAnim は num 変化で走るが、position 0 PM は num 不変で
+            // bounceAnim が発火しないので transform の取り合いは起きない。
+            createEffect(on(prerollKey, () => {
+              if (position !== 0 || props.period !== "pm") return;
+              if (!textRef || !groupRef) return;
+              pulseAnim?.cancel();
+              pulseScaleAnim?.cancel();
+              const originalFill = textRef.getAttribute("fill") || "#111111";
+              // ゲーム / サイバーパンク調のネオン管を意識した電撃グリーン. filter なしで
+              // 光って見せたいので、点灯中に hue を微妙に shift して「ネオンが humming
+              // してる」フィーリングを出す: 純ネオン緑 #00FF80 → シアン緑 #00FFAA → 戻る.
+              const NEON_ON = "#00FF80";
+              const NEON_HUM = "#00FFAA";
+              pulseAnim = animateMotion(textRef, [
+                { fill: originalFill, offset: 0 },
+                { fill: NEON_ON,      offset: 0.04 },  // 1st: 点灯
+                { fill: NEON_HUM,     offset: 0.22 },  // 1st: humming で cyan 寄りへ
+                { fill: NEON_ON,      offset: 0.42 },  // 1st: 緑に戻ってホールド終わり
+                { fill: originalFill, offset: 0.50 },  // 1st: 切れる (ンッ)
+                { fill: originalFill, offset: 0.55 },  // 間
+                { fill: NEON_ON,      offset: 0.59 },  // 2nd
+                { fill: NEON_HUM,     offset: 0.77 },
+                { fill: NEON_ON,      offset: 0.96 },
+                { fill: originalFill, offset: 1 },
+              ], {
+                duration: PULSE_MS * 2,
+                easing: "ease-in-out",
+              });
+              pulseScaleAnim = animateMotion(groupRef, [
+                { transform: "scale(1)",    offset: 0 },
+                // 1st サイクル: ドゥン → ドゥ → ドゥンッ → settle → hold → snap
+                { transform: "scale(1.30)", offset: 0.07 },  // ドゥン (中)
+                { transform: "scale(1.18)", offset: 0.14 },  // ドゥ (沈み)
+                { transform: "scale(1.45)", offset: 0.22 },  // ドゥンッ (大 + snap)
+                { transform: "scale(1.32)", offset: 0.32 },  // settle
+                { transform: "scale(1.30)", offset: 0.42 },  // ホールド
+                { transform: "scale(1)",    offset: 0.50 },  // 戻る
+                { transform: "scale(1)",    offset: 0.55 },  // 間
+                // 2nd サイクル: 同じパターン
+                { transform: "scale(1.30)", offset: 0.62 },
+                { transform: "scale(1.18)", offset: 0.69 },
+                { transform: "scale(1.45)", offset: 0.77 },
+                { transform: "scale(1.32)", offset: 0.86 },
+                { transform: "scale(1.30)", offset: 0.96 },
+                { transform: "scale(1)",    offset: 1 },
+              ], {
+                duration: PULSE_MS * 2,
+                easing: "ease-in-out",
               });
             }, { defer: true }));
 
@@ -247,6 +317,7 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
                   <circle cx={x()} cy={y()} r={18} fill={color()!.badge} />
                 </Show>
                 <text
+                  ref={textRef}
                   x={x()}
                   y={y()}
                   text-anchor="middle"
@@ -274,6 +345,13 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
             );
           }}
         </Index>
+
+        {/* 12h ⇄ 24h トグル時の preroll: 12 を震源にした衝撃波リング 1 本.
+            12 自体の色変化は上の <text ref={textRef}> の pulseAnim 側で担当.
+            数字が変わる PM 盤面でのみ意味があるので Show でマウント. */}
+        <Show when={props.period === "pm"}>
+          <TimeFormatPrerollFx centerX={CX} centerY={CY - NUM_R()} />
+        </Show>
 
         {/* 時針・分針・中心ネジは HandsLayer に分離。ScheduleLayer の上に乗せたいため。 */}
       </svg>

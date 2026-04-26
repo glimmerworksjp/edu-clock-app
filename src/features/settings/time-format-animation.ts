@@ -1,5 +1,7 @@
 import { createEffect, createRoot, createSignal, on } from "solid-js";
+import { motionAllowed } from "../../lib/motion";
 import { timeFormat, type TimeFormat } from "./time-format";
+import { TIME_FORMAT_PREROLL_MS } from "./time-format-preroll";
 
 /**
  * 12h ⇄ 24h トグルを「右回りにポポポポポッ」と切り替えるための表示ステート。
@@ -50,10 +52,16 @@ createRoot(() => {
     // ポジション 0 (= 12 時の位置) は値が "12" 固定で見た目は変わらないが、
     // 内部状態は最新 format に同期しておく (将来 12h/24h で表示が分岐した時のため)。
     setAt(0, current);
+    // 12 ピコンッピコンッ + 衝撃波 + 余韻 (TimeFormatPrerollFx + ClockFace 内 12 fill アニメ) が
+    // 終わってから stagger を始める。reduced-motion 時は preroll 演出をスキップするので遅延も 0。
+    const prerollDelay = motionAllowed() ? TIME_FORMAT_PREROLL_MS : 0;
     // ポジション 1..11 を時計回りに stagger でフリップ。
     for (let position = 1; position < NUM_POSITIONS; position++) {
       const pos = position;
-      const id = setTimeout(() => setAt(pos, current), pos * STAGGER_MS);
+      const id = setTimeout(
+        () => setAt(pos, current),
+        prerollDelay + pos * STAGGER_MS,
+      );
       pendingTimers.push(id);
     }
   }, { defer: true }));
