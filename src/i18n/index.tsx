@@ -66,7 +66,7 @@ export function I18nProvider(props: { children: JSX.Element }) {
     return i18n.flatten(resource) as unknown as Record<string, string>;
   });
 
-  // ICU MessageFormat の実体生成は重いのでテンプレ毎にキャッシュ。
+  /** ICU MessageFormat の実体生成は重いのでテンプレ毎にキャッシュ。 */
   const mfCache = new Map<string, IntlMessageFormat>();
   const getFormatter = (template: string): IntlMessageFormat => {
     let mf = mfCache.get(template);

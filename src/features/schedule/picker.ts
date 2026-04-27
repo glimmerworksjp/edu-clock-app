@@ -39,8 +39,8 @@ export const rotatePicker = (deltaDeg: number) => {
   setRotationRaw(r => r + deltaDeg);
 };
 
-// 防御的: rotateMinutes が変化したら ピッカーを閉じる (通常は overlay で時計操作はブロックされるが、
-// auto モード等で変化する可能性に備える)。
+/** 防御的 auto-close。rotateMinutes が変化したら閉じる (通常は overlay で時計操作はブロックされるが、
+ *  auto モード等で変化する可能性に備える)。 */
 createRoot(() => {
   createEffect(on(rotateMinutes, () => {
     if (pickerOpen()) closePicker();

@@ -106,7 +106,7 @@ interface Star {
   r: number;
   delay: number;
 }
-// 30 個に絞る (常時アニメなので合成負荷を軽く)。
+/** 星の固定座標。常時アニメするので 30 個に絞って合成負荷を抑える。 */
 const STARS: Star[] = Array.from({ length: 30 }, () => ({
   xPct: Math.random() * 100,
   yPct: Math.random() * 55,
@@ -120,7 +120,7 @@ interface SkyBackgroundProps {
 }
 
 const SkyBackground: Component<SkyBackgroundProps> = (props) => {
-  // グラデーションは 2 分刻みに量子化 (目で差がわからない粒度で repaint 頻度を下げる)。
+  /** 2 分刻みに量子化した分。目で差がわからない粒度で repaint 頻度を下げる。 */
   const quantizedMin = createMemo(() => Math.floor(props.totalMinutes / 2) * 2);
   const sky = createMemo(() => skyAtMinute(quantizedMin()));
   const sun = createMemo(() => sunPosition(props.totalMinutes));

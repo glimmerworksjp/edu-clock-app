@@ -21,6 +21,106 @@ const NUMBER_BOUNCE_KEYFRAMES: Keyframe[] = [
   { transform: "scale(1)",    offset: 1 },
 ];
 
+/** ネオン管調の電撃グリーン (12 ドゥンドゥドゥンッ用)。点灯中に hue を微 shift して humming 感を出す。 */
+const NEON_ON = "#00FF80";
+const NEON_HUM = "#00FFAA";
+
+/** 12 ドゥンドゥドゥンッ × 2 の text fill キーフレーム。originalFill ⇄ ネオン緑で点滅。 */
+const buildPulseFillKeyframes = (originalFill: string): Keyframe[] => [
+  { fill: originalFill, offset: 0 },
+  { fill: NEON_ON,      offset: 0.04 },
+  { fill: NEON_HUM,     offset: 0.22 },
+  { fill: NEON_ON,      offset: 0.42 },
+  { fill: originalFill, offset: 0.50 },
+  { fill: originalFill, offset: 0.55 },
+  { fill: NEON_ON,      offset: 0.59 },
+  { fill: NEON_HUM,     offset: 0.77 },
+  { fill: NEON_ON,      offset: 0.96 },
+  { fill: originalFill, offset: 1 },
+];
+
+/** 12 ドゥンドゥドゥンッ × 2 の group scale キーフレーム。各サイクルは
+ *  ドゥン → ドゥ → ドゥンッ → settle → hold → snap の波形を 2 回繰り返す (offset 0.5 で折返し)。 */
+const PULSE_SCALE_KEYFRAMES: Keyframe[] = [
+  { transform: "scale(1)",    offset: 0 },
+  { transform: "scale(1.30)", offset: 0.07 },
+  { transform: "scale(1.18)", offset: 0.14 },
+  { transform: "scale(1.45)", offset: 0.22 },
+  { transform: "scale(1.32)", offset: 0.32 },
+  { transform: "scale(1.30)", offset: 0.42 },
+  { transform: "scale(1)",    offset: 0.50 },
+  { transform: "scale(1)",    offset: 0.55 },
+  { transform: "scale(1.30)", offset: 0.62 },
+  { transform: "scale(1.18)", offset: 0.69 },
+  { transform: "scale(1.45)", offset: 0.77 },
+  { transform: "scale(1.32)", offset: 0.86 },
+  { transform: "scale(1.30)", offset: 0.96 },
+  { transform: "scale(1)",    offset: 1 },
+];
+
+/** 時間の数字 font-size。ばっじ×すっきり×ものとーんだけバッジの円が白で消えるので数字を少し大きく。 */
+const numberFontSize = (
+  colorModeValue: "sector" | "badge",
+  paletteIdValue: string,
+  kuwashiku: boolean,
+  num: number,
+): string => {
+  if (colorModeValue === "badge") {
+    if (paletteIdValue === "monotone" && !kuwashiku) return num >= 10 ? "24" : "30";
+    return num >= 10 ? "18" : "24";
+  }
+  if (kuwashiku) return num >= 10 ? "24" : "28";
+  return num >= 10 ? "32" : "36";
+};
+
+/** 値が変わった瞬間にバウンスさせる effect。実質 PM 盤面のみ発火 (AM/merged は num 不変で no-op)。
+ *  連打時に前のバウンスが残らないよう cancel してから start する。 */
+const setupNumberBounce = (
+  groupRefGetter: () => SVGGElement | undefined,
+  num: () => number,
+) => {
+  let anim: Animation | null = null;
+  createEffect(on(num, () => {
+    const g = groupRefGetter();
+    if (!g) return;
+    anim?.cancel();
+    anim = animateMotion(g, NUMBER_BOUNCE_KEYFRAMES, {
+      duration: NUMBER_BOUNCE_DURATION_MS,
+      easing: "ease-out",
+    });
+  }, { defer: true }));
+};
+
+/** PM の position 0 (てっぺんの 12) のみ発動する「12 ドゥンドゥドゥンッ × 2」effect。num 不変で
+ *  setupNumberBounce が走らないので、代わりに 2 サイクル分弾ませて「12 を足す」操作の主役を示す。
+ *  text fill をネオン緑に点滅、group scale を波形で弾ませる (互いに transform 取り合いは起きない)。 */
+const setupTwelveDun = (
+  period: () => "am" | "pm" | "merged",
+  position: number,
+  groupRefGetter: () => SVGGElement | undefined,
+  textRefGetter: () => SVGTextElement | undefined,
+) => {
+  let pulseAnim: Animation | null = null;
+  let pulseScaleAnim: Animation | null = null;
+  createEffect(on(prerollKey, () => {
+    if (position !== 0 || period() !== "pm") return;
+    const t = textRefGetter();
+    const g = groupRefGetter();
+    if (!t || !g) return;
+    pulseAnim?.cancel();
+    pulseScaleAnim?.cancel();
+    const originalFill = t.getAttribute("fill") || "#111111";
+    pulseAnim = animateMotion(t, buildPulseFillKeyframes(originalFill), {
+      duration: PULSE_MS * 2,
+      easing: "ease-in-out",
+    });
+    pulseScaleAnim = animateMotion(g, PULSE_SCALE_KEYFRAMES, {
+      duration: PULSE_MS * 2,
+      easing: "ease-in-out",
+    });
+  }, { defer: true }));
+};
+
 interface ClockFaceProps {
   period: "am" | "pm" | "merged";
   /** vivid パレット時の AM/PM 配色判別用 (merged 時のみ参照)。 */
@@ -63,7 +163,7 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
   const VIEW = 340;
   const CX = VIEW / 2;
   const CY = VIEW / 2;
-  // くわしくは時計を縮めて外に分数字スペースを確保、すっきりは画面いっぱい。
+  /** くわしくは時計を縮めて外に分数字スペースを確保、すっきりは画面いっぱい。 */
   const R = () => isKuwashiku() ? 130 : 148;
   const NUM_R = () => R() - 18;
   const BAND_INNER = () => NUM_R() - 16;
@@ -71,18 +171,19 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
   const OUTER_RING = () => R() + 3;
   const MINUTE_NUM_R = () => R() + 20;
 
+  /** period × palette から 12 個の時間色を引く。merged 時、vivid は時刻で AM/PM 切替、それ以外は am 流用
+   *  (vivid 以外は AM=PM の同色なので)。 */
   const colors = createMemo((): HourColor[] => {
     const palette = getPalette(paletteId());
     if (props.period === "am") return palette.am;
     if (props.period === "pm") return palette.pm;
-    // merged: 他パレットは AM=PM なので am 流用。vivid は AM/PM で配色が違うので時刻で切替。
     if (palette.id !== "vivid") return palette.am;
     return props.hours < 12 ? palette.am : palette.pm;
   });
 
   /** ポジション (0..11) における表示数値。
-   *  - position 0 (12 時の位置) は常に 12。
-   *  - AM / merged は 1..11 固定。
+   *  - position 0 (12 時) は常に 12
+   *  - AM / merged は 1..11 固定
    *  - PM は displayedFormatAt(position) に応じて 1..11 / 13..23 (各ポジション独立 reactive で
    *    ポジションごとに時間差で format を更新 → 時計回りの stagger になる)。 */
   const numberAt = (position: number): number => {
@@ -129,7 +230,6 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
           }
         />
 
-        {/* 扇形モード */}
         <Show when={colorMode() === "sector"}>
           <For each={colors()}>
             {(color, i) => (
@@ -170,7 +270,6 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
           <circle cx={CX} cy={CY} r={R()} fill="#ffffff" />
         </Show>
 
-        {/* 外周 60 分目盛り (くわしく時のみ) */}
         <Show when={isKuwashiku()}>
           <For each={Array.from({ length: 60 })}>
             {(_, i) => {
@@ -193,7 +292,6 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
           </For>
         </Show>
 
-        {/* くわしく: 外周に 1〜60 の分数字 */}
         <Show when={isKuwashiku()}>
           <For each={Array.from({ length: 60 })}>
             {(_, i) => {
@@ -232,71 +330,9 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
 
             let groupRef: SVGGElement | undefined;
             let textRef: SVGTextElement | undefined;
-            let bounceAnim: Animation | null = null;
-            let pulseAnim: Animation | null = null;
-            let pulseScaleAnim: Animation | null = null;
 
-            // 値が変わった瞬間にバウンス。PM 盤面でだけ実質発火 (AM/merged は num 固定で no-op)。
-            // 連打時に前のバウンスが残らないよう cancel してから start。
-            createEffect(on(num, () => {
-              if (!groupRef) return;
-              bounceAnim?.cancel();
-              bounceAnim = animateMotion(groupRef, NUMBER_BOUNCE_KEYFRAMES, {
-                duration: NUMBER_BOUNCE_DURATION_MS,
-                easing: "ease-out",
-              });
-            }, { defer: true }));
-
-            // 12 ドゥンドゥドゥンッ × 2: PM の position 0 (てっぺんの 12) のみ。値不変で stagger
-            // bounce が走らないので代わりに 2 サイクル分弾ませて「12 を足す」操作の主役を示す。
-            // text は fill を originalFill ⇄ ネオン緑で点滅、group は scale を波形で弾ませる。
-            // 同 group の bounceAnim は num 不変で発火しないので transform 取り合いは起きない。
-            createEffect(on(prerollKey, () => {
-              if (position !== 0 || props.period !== "pm") return;
-              if (!textRef || !groupRef) return;
-              pulseAnim?.cancel();
-              pulseScaleAnim?.cancel();
-              const originalFill = textRef.getAttribute("fill") || "#111111";
-              // ネオン管調の電撃グリーン。点灯中に hue を微 shift して humming 感を出す。
-              const NEON_ON = "#00FF80";
-              const NEON_HUM = "#00FFAA";
-              pulseAnim = animateMotion(textRef, [
-                { fill: originalFill, offset: 0 },
-                { fill: NEON_ON,      offset: 0.04 },
-                { fill: NEON_HUM,     offset: 0.22 },
-                { fill: NEON_ON,      offset: 0.42 },
-                { fill: originalFill, offset: 0.50 },
-                { fill: originalFill, offset: 0.55 },
-                { fill: NEON_ON,      offset: 0.59 },
-                { fill: NEON_HUM,     offset: 0.77 },
-                { fill: NEON_ON,      offset: 0.96 },
-                { fill: originalFill, offset: 1 },
-              ], {
-                duration: PULSE_MS * 2,
-                easing: "ease-in-out",
-              });
-              pulseScaleAnim = animateMotion(groupRef, [
-                { transform: "scale(1)",    offset: 0 },
-                // 1st: ドゥン → ドゥ → ドゥンッ → settle → hold → snap
-                { transform: "scale(1.30)", offset: 0.07 },
-                { transform: "scale(1.18)", offset: 0.14 },
-                { transform: "scale(1.45)", offset: 0.22 },
-                { transform: "scale(1.32)", offset: 0.32 },
-                { transform: "scale(1.30)", offset: 0.42 },
-                { transform: "scale(1)",    offset: 0.50 },
-                { transform: "scale(1)",    offset: 0.55 },
-                // 2nd: 同パターン
-                { transform: "scale(1.30)", offset: 0.62 },
-                { transform: "scale(1.18)", offset: 0.69 },
-                { transform: "scale(1.45)", offset: 0.77 },
-                { transform: "scale(1.32)", offset: 0.86 },
-                { transform: "scale(1.30)", offset: 0.96 },
-                { transform: "scale(1)",    offset: 1 },
-              ], {
-                duration: PULSE_MS * 2,
-                easing: "ease-in-out",
-              });
-            }, { defer: true }));
+            setupNumberBounce(() => groupRef, num);
+            setupTwelveDun(() => props.period, position, () => groupRef, () => textRef);
 
             return (
               <g
@@ -315,16 +351,7 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
                   y={y()}
                   text-anchor="middle"
                   dominant-baseline="central"
-                  font-size={
-                    colorMode() === "badge"
-                      // ばっじ×すっきり×ものとーんはバッジの円が白で消えるので数字を少し大きく。
-                      ? (paletteId() === "monotone" && !isKuwashiku()
-                          ? (num() >= 10 ? "24" : "30")
-                          : (num() >= 10 ? "18" : "24"))
-                      : isKuwashiku()
-                        ? (num() >= 10 ? "24" : "28")
-                        : (num() >= 10 ? "32" : "36")
-                  }
+                  font-size={numberFontSize(colorMode(), paletteId(), isKuwashiku(), num())}
                   font-weight="900"
                   font-family="Nunito, sans-serif"
                   fill={colorMode() === "badge" ? color()!.text : "#111111"}
@@ -339,13 +366,11 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
           }}
         </Index>
 
-        {/* 12h ⇄ 24h preroll: 12 を震源にした衝撃波リング。色変化は上の text の pulseAnim 側で担当。
-            数字が変わる PM 盤面でのみ意味があるので Show でマウント。 */}
+        {/* 12h ⇄ 24h preroll の衝撃波リング (色変化は上の text の pulseAnim 側で担当)。数字が変わる
+            PM 盤面でのみ意味があるので Show でマウント。 */}
         <Show when={props.period === "pm"}>
           <TimeFormatPrerollFx centerX={CX} centerY={CY - NUM_R()} />
         </Show>
-
-        {/* 時針・分針・中心ネジは HandsLayer に分離 (ScheduleLayer の上に乗せたいため) */}
       </svg>
     </div>
   );

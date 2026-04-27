@@ -8,7 +8,8 @@ import { DEFAULT_PALETTE_ID, getPalette, palettes } from "../../colors";
 
 const [paletteId, setPaletteIdRaw] = persistedSignal<string>("paletteId", DEFAULT_PALETTE_ID);
 
-// 永続化された id が現存しないパレットを指していたらデフォルトへ (バージョンアップで id 消失時の保険)。
+/** 永続化された id が現存しないパレットを指していたらデフォルトへ戻す保険 (バージョンアップで id が
+ *  消えた時に壊れないようにする)。 */
 if (!palettes.some(p => p.id === paletteId())) {
   setPaletteIdRaw(DEFAULT_PALETTE_ID);
 }

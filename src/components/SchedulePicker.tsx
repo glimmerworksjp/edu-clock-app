@@ -23,7 +23,7 @@ import { animateMotion, motionAllowed } from "../lib/motion";
  * アイコンタップで rotateMinutes() に予定追加 + 閉じる、Overlay 空タップで閉じる。
  */
 
-// SettingsPanel の四隅ボタンと同じ tablet ブレイクポイントで大きくする。
+/** SettingsPanel の四隅ボタンと同じ tablet ブレイクポイントで大きくする。 */
 const RING_RADIUS_MOBILE = 110;
 const RING_RADIUS_TABLET = 160;
 const ICON_SIZE_MOBILE = 44;
@@ -53,6 +53,11 @@ const SchedulePicker: Component = () => {
   );
 };
 
+/**
+ * リングメニュー本体。暗幕背景は backdrop-filter: blur(2px) + 半透明黒。open 中は chronostasis で
+ * 時計画面の動的要素が全停止するため、blur は 1 回 paint されたら以降は compositing layer cache に
+ * 乗って合成負荷ゼロで済む (App.tsx 側で chronostasis 発動)。
+ */
 const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
   const isTablet = useIsTablet();
   const isLandscape = useOrientation();
@@ -60,9 +65,9 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
   const iconSize = () => isTablet() ? ICON_SIZE_TABLET : ICON_SIZE_MOBILE;
   const iconFont = () => isTablet() ? ICON_FONT_TABLET : ICON_FONT_MOBILE;
 
-  // Stagger 起点: portrait は 12 時 (index 0)、landscape は 3 時 (index 3)。
-  // landscape ではよていボタンが画面上にありリングの上半分が画面外にはみ出るので、12 時から
-  // stagger すると最初の数 frame が見えない場所で動く。3 時方向から始めて画面内で stagger を即見せる。
+  /** Stagger 起点 index。portrait=12 時、landscape=3 時 (よていボタンが画面上端でリング上半分が画面外
+   *  なので、12 時から stagger すると最初の数 frame が見えない位置で動く → 画面内に確実に見える 3 時から
+   *  始めて stagger を即見せる)。 */
   const staggerStartIndex = () => isLandscape() ? 3 : 0;
 
   let dragStart: { x: number; y: number } | null = null;
@@ -70,15 +75,15 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
   let lastAngularRad = 0;
   let velocityHistory: { time: number; deltaDeg: number }[] = [];
   let inertiaRaf: number | null = null;
-  // 慣性中のタップは「慣性キャンセル」のみで close しない (ユーザーは止めたいだけ)。
+  /** 慣性中のタップは「慣性キャンセル」のみで close しない (ユーザーは止めたいだけ)。 */
   let inertiaCanceledByTap = false;
-  // よていボタンの pointerdown で picker が開いた直後、release 時の合成 click が overlay に
-  // 飛んできて即 closePicker されるのを防ぐ (= overlay 自身が pointerdown を見た場合のみ click 有効)。
+  /** よていボタン pointerdown で picker が開いた直後、release 時の合成 click が overlay に飛んでくる
+   *  (= 即 closePicker されてしまう)。overlay 自身が pointerdown を見た場合のみ click を有効扱いに
+   *  するためのフラグ。 */
   let pointerDownOnOverlay = false;
 
-  // === rAF 間引き ===
-  // 120Hz 端末では 1 frame に pointermove が複数発火し、毎回 rotatePicker を呼ぶと親要素の inline style が
-  // 1 frame 内で重複書込みされる。pendingDelta に貯めて次の rAF で 1 回だけ commit。
+  /** rAF 間引き用の累積。120Hz 端末では 1 frame 内に pointermove が複数発火し、毎回 rotatePicker を
+   *  呼ぶと親要素の inline style が同フレーム内で重複書込みされる。次の rAF で 1 回だけ commit する。 */
   let pendingDelta = 0;
   let rotateRaf: number | null = null;
   const flushRotation = () => {
@@ -206,7 +211,7 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
     closePicker();
   };
 
-  // ホイール操作は慣性無し。慣性中のホイールはキャンセルしてから新規回転。
+  /** ホイール操作は慣性無し。慣性中のホイールはキャンセルしてから新規回転。 */
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
     cancelInertia();
@@ -219,8 +224,6 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
     cancelPendingRotation();
   });
 
-  // 暗幕背景は backdrop-filter: blur(2px) + 半透明黒。open 中は chronostasis で時計画面の動的要素が
-  // 全停止するため、blur は 1 回 paint されたら以降は compositing layer cache に乗って合成負荷ゼロ。
   return (
     <div
       class="fixed inset-0 z-[100] backdrop-blur-[2px]"
@@ -279,21 +282,22 @@ const RingIcon: Component<{
   let buttonRef: HTMLButtonElement | undefined;
   const { t } = useI18n();
 
-  // 角度位置は static (mount 時 1 回計算)。i=0 を 12 時 (-90°) からスタート、CW 並び。
+  /** 角度位置 (mount 時 1 回計算)。i=0 を 12 時 (-90°) からスタートして CW 並び。 */
   const angleRad = (props.index / SCHEDULE_ICONS.length) * 2 * Math.PI - Math.PI / 2;
   const x = props.ringRadius * Math.cos(angleRad);
   const y = props.ringRadius * Math.sin(angleRad);
   const offsetX = x - props.iconSize / 2;
   const offsetY = y - props.iconSize / 2;
-  // 親の rotate を打ち消して emoji を upright に保つ。--ring-rot 変化は CSS cascade で自動再計算
-  // されるので子の inline style 書込みはゼロ / frame。
+
+  /** 親の rotate を打ち消して emoji を upright に保つ transform 文字列。--ring-rot 変化は CSS cascade
+   *  で自動再計算されるので子の inline style 書込みはゼロ / frame。 */
   const restingTransform =
     `translate(${offsetX}px, ${offsetY}px) rotate(calc(-1 * var(--ring-rot, 0deg)))`;
 
-  // 開始時アニメ: origin → 角度位置 + scale 0→1 + opacity 0→1。staggerStartIndex を 0 として CW 順に出現。
-  // appearance 中は WAAPI が transform を上書きするので counter-rotate が一時的に効かない (= 開直後に
-  // 高速回転すると emoji がわずかに傾く)。実用上 picker open 直後に高速回転は起きないので許容。
-  // reduce-motion 中は animateMotion が null を返してアニメスキップ → 即最終位置に出現。
+  /** 開始時アニメ: origin → 角度位置 + scale 0→1 + opacity 0→1。staggerStartIndex を 0 として CW 順に
+   *  出現。appearance 中は WAAPI が transform を上書きするので counter-rotate が一時的に効かない
+   *  (= 開直後に高速回転すると emoji がわずかに傾く)。実用上 picker open 直後に高速回転は起きないので
+   *  許容。reduce-motion 中は animateMotion が null を返してアニメスキップ → 即最終位置に出現。 */
   onMount(() => {
     if (!buttonRef) return;
     const N = SCHEDULE_ICONS.length;

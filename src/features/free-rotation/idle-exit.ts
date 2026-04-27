@@ -35,24 +35,22 @@ export const useIdleExitTimer = () => {
     }
   };
 
+  const shouldRun = () =>
+    rotateActive() && rotateMode() === "manual" && !pickerOpen();
+
   const armTimer = () => {
     clearTimer();
     timerId = setTimeout(() => {
       // fire 時に再 check (60 秒の間に状態が変わっている可能性があるので shouldRun と同じ条件で gate)。
-      if (rotateActive() && rotateMode() === "manual" && !pickerOpen()) {
-        exitRotate();
-      }
+      if (shouldRun()) exitRotate();
     }, IDLE_EXIT_MS);
   };
-
-  const shouldRun = () =>
-    rotateActive() && rotateMode() === "manual" && !pickerOpen();
 
   const onActivity = () => {
     if (shouldRun()) armTimer();
   };
 
-  // 状態変化 (mode 切替 / picker 開閉) を見て自動 arm/clear。
+  /** 状態変化 (mode 切替 / picker 開閉) を観測して自動 arm/clear。 */
   createEffect(() => {
     if (shouldRun()) {
       armTimer();

@@ -14,7 +14,7 @@ export type RotateStyle = "crank" | "drag";
 
 const [rotateStyle, setStyleRaw] = createSignal<RotateStyle>("drag");
 
-// 自由回転モードに入るたびに drag に戻す (前回 crank の状態が残ると再入時にユーザーが戸惑う)。
+/** 自由回転モードに入るたびに drag へ戻すリセット。前回 crank の状態が残ると再入時にユーザーが戸惑うため。 */
 createRoot(() => {
   createEffect(on(rotateActive, (active) => {
     if (active) setStyleRaw("drag");

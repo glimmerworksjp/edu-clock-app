@@ -24,11 +24,10 @@ interface Props {
 const TimeFormatPrerollFx: Component<Props> = (props) => {
   let ringRef: SVGCircleElement | undefined;
 
+  // ネオン点灯 2 周が完全に終わった瞬間 (delay = PULSE_MS * 2) から衝撃波を発火。
   createEffect(on(prerollKey, () => {
     if (!ringRef) return;
     ringRef.getAnimations().forEach((a) => a.cancel());
-
-    // ネオン点灯 2 周が完全に終わった瞬間 (delay = PULSE_MS * 2) に外へふわっと抜ける衝撃波。
     animateMotion(
       ringRef,
       [

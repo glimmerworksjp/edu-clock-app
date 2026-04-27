@@ -40,10 +40,10 @@ const setAt = (position: number, format: TimeFormat) => {
 createRoot(() => {
   createEffect(on(timeFormat, (current) => {
     cancelPending();
-    // ポジション 0 (12 時) は値が "12" 固定で見た目変化なしだが、内部状態は最新 format に同期。
+    // pos 0 (12 時) は値が "12" 固定で見た目は変化しないが、内部状態は最新 format に同期しておく。
     setAt(0, current);
-    // 12 ドゥンドゥドゥンッ + パァッ衝撃波 (TimeFormatPrerollFx + ClockFace 内 12 fill アニメ) が
-    // 終わってから stagger を始める。reduce-motion 時は preroll 演出をスキップするので遅延も 0。
+    // 12 ドゥンドゥドゥンッ + パァッ衝撃波 (TimeFormatPrerollFx + ClockFace 内 12 fill アニメ) が終わって
+    // から stagger を始める。reduce-motion 時は preroll 演出をスキップするので遅延も 0。
     const prerollDelay = motionAllowed() ? TIME_FORMAT_PREROLL_MS : 0;
     for (let position = 1; position < NUM_POSITIONS; position++) {
       const pos = position;

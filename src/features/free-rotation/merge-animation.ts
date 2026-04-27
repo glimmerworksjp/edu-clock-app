@@ -70,8 +70,8 @@ export const useMergeAnimation = () => {
     ),
   );
 
-  // transition 中は chronostasis を要求して下層 tick (useCurrentTime / auto-rotate / Star twinkle) を
-  // 一斉停止し、wrapper opacity フェードと merged container アニメに合成資源を全振りさせる。
+  /** transition 中は chronostasis を要求し、下層 tick (useCurrentTime / auto-rotate / Star twinkle) を
+   *  一斉停止する → wrapper opacity フェードと merged container アニメに合成資源を全振りさせる。 */
   createEffect(
     on(transitioning, (held) => {
       if (!held) return;

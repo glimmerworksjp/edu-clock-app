@@ -42,9 +42,8 @@ const HandsLayer: Component<HandsLayerProps> = (props) => {
   };
   const minuteAngle = () => props.minutes * 6 - 90;
 
-  // shake は外側 wrapper <g> の CSS transform で発動。内側 <g> は SVG transform で角度を持つので、
-  // そちらと compose させるため別レイヤーに分けてある。transform-box: view-box で viewBox 中央
-  // (= clock 中心) を pivot にする。
+  /** shake 発動用の外側 wrapper ref。内側 <g> は SVG transform で角度を持つので、それと compose
+   *  させるため別レイヤーに分ける。transform-box: view-box で viewBox 中央 (= clock 中心) を pivot に。 */
   let minuteHandWrapperRef: SVGGElement | undefined;
   createEffect(() => {
     const key = props.shakeKey?.() ?? 0;

@@ -46,6 +46,7 @@ export const useAmPmPreviewHold = (actualIsAm: Accessor<boolean>) => {
 
   injectStyleOnce();
 
+  /** ロック中だけ body class を toggle して #root 背景を青に切替える。 */
   createEffect(() => {
     if (typeof document === "undefined") return;
     document.body.classList.toggle(LOCKED_BODY_CLASS, locked());

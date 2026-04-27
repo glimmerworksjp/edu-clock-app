@@ -56,7 +56,7 @@ export const ClockLayout: Component = () => {
     return time();
   });
 
-  // 自由回転 (auto/drag) では rotateMinutes が小数のため、event match 用に整数分へ snap。
+  /** event match 用に整数分へ snap (自由回転中は rotateMinutes が小数になり得るため)。 */
   const displayedMinutesTotal = createMemo(() => {
     const d = displayed();
     return ((d.hours * 60 + Math.round(d.minutes)) % 1440 + 1440) % 1440;
@@ -64,7 +64,8 @@ export const ClockLayout: Component = () => {
 
   const actualIsAm = createMemo(() => displayed().hours < 12);
   const { isAm, startHold, clearHold } = useAmPmPreviewHold(actualIsAm);
-  // preview 押下中は .selection-dim-instant で 0ms、離せば 380ms フェード (index.css)。
+  /** AM/PM プレビュー長押しで反対側を表示している間 true。.selection-dim-instant 経由で
+   *  押下=即時切替, 離す=380ms フェード (詳細は index.css)。 */
   const previewFlipped = createMemo(() => isAm() !== actualIsAm());
 
   const amTime = createMemo(() => ({
@@ -77,11 +78,10 @@ export const ClockLayout: Component = () => {
     minutes: displayed().minutes,
   }));
 
-  // ===== 自由回転ドラッグ (rAF で間引き) =====
   let containerRef: HTMLDivElement | undefined;
   let amWrapperRef: HTMLDivElement | undefined;
   let pmWrapperRef: HTMLDivElement | undefined;
-  // 高頻度 pointermove で書き換わるため signal にせず直接 mutate して allocation を抑える。
+  /** 高頻度 pointermove で書き換わるため signal にせず直接 mutate して allocation を抑える。 */
   let dragRef: DragState | null = null;
   const [dragging, setDragging] = createSignal(false);
   let pendingMinutes: number | null = null;
@@ -139,11 +139,8 @@ export const ClockLayout: Component = () => {
     if (rafId !== null) cancelAnimationFrame(rafId);
   });
 
-  // ===== マウスホイール =====
-  // SolidJS の onWheel JSX は passive listener として登録され preventDefault が効かないため、
-  // 自前で addEventListener("wheel", ..., { passive: false }) で attach する。
-  // 止まる位置を整数分にしたいので float 累積を Math.round で snap、tween で滑らかに動かす。
   let wheelTarget: number | null = null;
+  /** session 内の累積 float (snap 前)。session idle まで保持して連続 wheel の小数累積を続けて取る。 */
   let wheelTargetFloat: number | null = null;
   let wheelTweenStartTime = 0;
   let wheelTweenStartMinutes = 0;
@@ -163,7 +160,6 @@ export const ClockLayout: Component = () => {
     const m = wheelTweenStartMinutes + (wheelTarget - wheelTweenStartMinutes) * eased;
     seekRotate(m);
     if (t >= 1) {
-      // wheelTargetFloat は session idle まで保持 → 連続 wheel の小数累積を続けて取れる。
       wheelTarget = null;
       wheelTweenRaf = null;
       return;
@@ -180,6 +176,10 @@ export const ClockLayout: Component = () => {
     }
   };
 
+  /** ホイール event ハンドラ。SolidJS の onWheel JSX は passive listener として登録されて
+   *  preventDefault が効かないため、onMount で自前 addEventListener("wheel", ..., { passive: false }) で
+   *  attach する (page scroll を抑制する用)。止まる位置を整数分に揃えるため float 累積を Math.round で
+   *  snap し、tween で滑らかに動かす。 */
   const onWheel = (e: WheelEvent) => {
     if (!rotateActive() || rotateMode() !== "manual") return;
     if (dragging()) return;
@@ -217,15 +217,33 @@ export const ClockLayout: Component = () => {
     if (wheelSessionIdleTimer) clearTimeout(wheelSessionIdleTimer);
   });
 
-  // ===== かさね/わけ アニメーションと自動回転 =====
   const { mergedVisible, transitioning, mergedRevealed } = useMergeAnimation();
   useAutoRotateTick();
   useIdleExitTimer();
 
-  // dim opacity は 2 軸: merge dim は wrapper inline opacity (常に 380ms smooth)、
-  // selection dim は内側 DimOverlay (.selection-dim-instant 中だけ 0ms)。merge 切替の race を構造で防ぐ。
+  /** AM 側 selection dim opacity (アクティブ=1, 薄い側=0.25)。
+   *
+   *  dim opacity は 2 軸構造:
+   *    - merge dim (mergedVisible? 0 : 1): wrapper inline opacity で 380ms smooth fade
+   *    - selection dim (これ): 内側 DimOverlay の .fade-on-dim、.selection-dim-instant 中だけ 0ms
+   *  この分離で merge 切替時の transitioning timing race を構造的に防ぐ。 */
   const amSelectionOpacity = createMemo(() => isAm() ? 1 : 0.25);
+  /** PM 側 selection dim opacity (詳細は amSelectionOpacity の JSDoc 参照)。 */
   const pmSelectionOpacity = createMemo(() => isAm() ? 0.25 : 1);
+
+  /** wrapper への .selection-dim-instant 付与条件 (= 子の .fade-on-dim を 0ms 即時切替に上書き):
+   *    1. AM/PM プレビュー長押し中 (押下=即時, 離す=380ms フェード)
+   *    2. 自由回転 split 中で merge transition 外 → 自動回転 / drag / wheel で 12:00 を跨ぐ瞬間の
+   *       selection 切替がパッと
+   *  merge transition 中 (transitioning) は smooth fade を維持。 */
+  const selectionDimInstant = createMemo(
+    () => previewFlipped() || (rotateActive() && !transitioning()),
+  );
+
+  /** AM/PM 各 wrapper の表示条件: merged 中 (transitioning 以外) は隠す。drag 中は反対側を unmount
+   *  して合成負荷を軽減する。 */
+  const amSplitVisible = createMemo(() => (!mergedVisible() || transitioning()) && (isAm() || !dragging()));
+  const pmSplitVisible = createMemo(() => (!mergedVisible() || transitioning()) && (!isAm() || !dragging()));
 
   return (
     <div class="w-full h-full overflow-hidden relative">
@@ -233,7 +251,6 @@ export const ClockLayout: Component = () => {
         <SkyBackground totalMinutes={rotateMinutes()} />
       </Show>
 
-      {/* 時計コンテナ (自由回転時はここがドラッグ + ホイール領域) */}
       <div
         ref={containerRef}
         class={"absolute inset-0 flex items-stretch " + (isLandscape() ? "flex-row" : "flex-col")}
@@ -256,9 +273,7 @@ export const ClockLayout: Component = () => {
             "clock-wrapper-transition relative flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 " +
             (isLandscape() ? "-mr-3" : "-mb-3")
           }
-          // .selection-dim-instant 発動条件: preview 押下中, または rotate split で merge transition 中以外。
-          // merge transition 中は smooth fade を維持。
-          classList={{ "selection-dim-instant": previewFlipped() || (rotateActive() && !transitioning()) }}
+          classList={{ "selection-dim-instant": selectionDimInstant() }}
           style={{
             transform: amTransform(mergedVisible(), isLandscape()),
             opacity: mergedVisible() ? 0 : 1,
@@ -266,12 +281,11 @@ export const ClockLayout: Component = () => {
             "will-change": transitioning() ? "transform, opacity" : "auto",
           }}
         >
-          {/* merged 中 (transitioning 以外) は隠す。drag 中は反対側を unmount して合成負荷軽減。 */}
-          <Show when={(!mergedVisible() || transitioning()) && (isAm() || !dragging())}>
+          <Show when={amSplitVisible()}>
             <DimOverlay opacity={amSelectionOpacity()}>
               <ClockFace period="am" hours={amTime().hours} />
             </DimOverlay>
-            {/* 予定アイコンは dim 階層の外。merge transition 中は外す (620ms 重い合成回避) */}
+            {/* ScheduleLayer は dim 階層の外。merge transition 中は外す (620ms 重い合成回避) */}
             <Show when={!transitioning()}>
               <ScheduleLayer
                 period="am"
@@ -292,7 +306,7 @@ export const ClockLayout: Component = () => {
             "clock-wrapper-transition relative flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 " +
             (isLandscape() ? "-ml-3" : "-mt-3")
           }
-          classList={{ "selection-dim-instant": previewFlipped() || (rotateActive() && !transitioning()) }}
+          classList={{ "selection-dim-instant": selectionDimInstant() }}
           style={{
             transform: pmTransform(mergedVisible(), isLandscape()),
             opacity: mergedVisible() ? 0 : 1,
@@ -300,7 +314,7 @@ export const ClockLayout: Component = () => {
             "will-change": transitioning() ? "transform, opacity" : "auto",
           }}
         >
-          <Show when={(!mergedVisible() || transitioning()) && (!isAm() || !dragging())}>
+          <Show when={pmSplitVisible()}>
             <DimOverlay opacity={pmSelectionOpacity()}>
               <ClockFace period="pm" hours={pmTime().hours} />
             </DimOverlay>
@@ -318,8 +332,10 @@ export const ClockLayout: Component = () => {
         </div>
       </div>
 
-      {/* かさねモード: 中央の単一時計。rotateActive トグル時も滑らかに消えるよう
-          見えうる間 (mergedVisible || transitioning) は DOM に保持する。 */}
+      {/* かさねモード container。rotateActive トグル時も滑らかに消えるよう、見えうる間
+          (mergedVisible || transitioning) は DOM に保持する。
+          opacity / transform は mergedRevealed 経由 (false→true 時に 1 frame 遅延 → fresh mount でも
+          CSS transition が発火する。詳細は merge-animation.ts)。 */}
       <Show when={mergedVisible() || transitioning()}>
         <div
           class={
@@ -327,7 +343,6 @@ export const ClockLayout: Component = () => {
             (isLandscape() ? "flex-row" : "flex-col")
           }
           style={{
-            // mergedRevealed は false→true 時に 1 frame 遅延 → fresh mount でも CSS transition 発火 (詳細は merge-animation.ts)。
             opacity: mergedRevealed() ? 1 : 0,
             transform: mergedTransform(mergedRevealed()),
             "transform-origin": "center",
@@ -373,8 +388,8 @@ export const ClockLayout: Component = () => {
         </div>
       </Show>
 
-      {/* AM/PM バッジ。MORPHING_SLOT.LEFT を rotate manual の予定ボタンと共有して
-          モード遷移時にブラウザがモーフィング描画する (slot 一覧は features/view-transition.ts)。 */}
+      {/* AM/PM バッジ。MORPHING_SLOT.LEFT を rotate manual の予定ボタンと共有してモード遷移時に
+          ブラウザがモーフィング描画する (slot 一覧は features/view-transition.ts)。 */}
       <Show when={!rotateActive()}>
         <div
           class={

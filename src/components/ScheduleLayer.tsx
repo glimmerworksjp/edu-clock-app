@@ -49,22 +49,21 @@ const TRI_BASE_HALF = 1.5;
 const TRI_HEIGHT = 2.5;
 
 const LONG_PRESS_MS = 500;
-/** タップ判定の追加バッファ (viewBox 単位)。子どもの指でも当てやすくするための透明拡張領域。 */
+/** タップ判定の追加バッファ (viewBox 単位)。子どもの指でも当てやすくする透明拡張領域。 */
 const ICON_TOUCH_BUFFER = 16;
 /** ✕ボタンのタップ判定半径。視認可能な赤円 (DELETE_BUTTON_RADIUS=7) より大きめに取る。 */
 const DELETE_BUTTON_TOUCH_RADIUS = 26;
-
 
 /** ポヨン3 (3 段の高速バウンス)。タップ + マッチ window 入り口の one-shot で共通使用。 */
 const POYON3_DURATION_MS = 400;
 const POYON3_KEYFRAMES: Keyframe[] = [
   { transform: "scale(1)",    offset: 0 },
-  { transform: "scale(1.22)", offset: 0.13 },  // 1 段目 up
-  { transform: "scale(0.90)", offset: 0.26 },  // 1 段目 down
-  { transform: "scale(1.16)", offset: 0.43 },  // 2 段目 up
-  { transform: "scale(0.94)", offset: 0.56 },  // 2 段目 down
-  { transform: "scale(1.10)", offset: 0.74 },  // 3 段目 up
-  { transform: "scale(1)",    offset: 1 },     // 着地
+  { transform: "scale(1.22)", offset: 0.13 },
+  { transform: "scale(0.90)", offset: 0.26 },
+  { transform: "scale(1.16)", offset: 0.43 },
+  { transform: "scale(0.94)", offset: 0.56 },
+  { transform: "scale(1.10)", offset: 0.74 },
+  { transform: "scale(1)",    offset: 1 },
 ];
 
 /** マッチ中の continuous loop。0..42% にバウンス + わずかな rotation で躍動感、42..100% は scale 1 で rest。 */
@@ -80,7 +79,7 @@ const MATCH_LOOP_KEYFRAMES: Keyframe[] = [
   { transform: "scale(1) rotate(0deg)",     offset: 1 },
 ];
 
-/** くるくる〜パッ (削除アニメ)。0..65% は等速で 720° 回転、65..100% で +360° しながら scale/opacity を 0 へ。 */
+/** くるくる〜パッ (削除アニメ)。0..65% で 720° 回転、65..100% で +360° しながら scale/opacity を 0 へ。 */
 const POOF_DURATION_MS = 900;
 
 /** displayed - eventM の差を [-720, 720] に正規化 (0/1440 跨ぎ対応)。 */
@@ -90,7 +89,7 @@ const wrapMinuteDiff = (diff: number): number => {
   return diff;
 };
 
-/** ポヨポヨアニメ用 window。通常 2 分前から、天頂位置 (AM 0:00 / PM 12:00) のみ 5 分前から (AM/PM 境目を強調)。 */
+/** ポヨポヨアニメ用 window。通常 2 分前から、天頂 (AM 0:00 / PM 12:00) のみ 5 分前から (AM/PM 境目を強調)。 */
 const MATCH_WINDOW_MINUTES_BEFORE = 2;
 const MATCH_WINDOW_MINUTES_BEFORE_NOON = 5;
 const isWithinMatchWindow = (displayed: number, eventM: number): boolean => {
@@ -101,8 +100,8 @@ const isWithinMatchWindow = (displayed: number, eventM: number): boolean => {
   return diff >= -before && diff <= 0;
 };
 
-/** 「dim 側でもハッキリ見せる」用 window。ポヨポヨ window と分離してあるのは目的が違うため
- *  (ポヨポヨ = アニメで気を引く / 見える = もうすぐ来る予告)。 */
+/** 「dim 側でもハッキリ見せる」用 window。ポヨポヨ window とは目的が違うので別概念で持つ
+ *  (ポヨポヨ = アニメで気を引く / こちら = もうすぐ来る予告)。 */
 const VISIBILITY_WINDOW_MINUTES_BEFORE = 2;
 const isWithinVisibilityWindow = (displayed: number, eventM: number): boolean => {
   const diff = wrapMinuteDiff(displayed - eventM);
@@ -130,6 +129,8 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
   const iconFontSize = () => isKuwashiku() ? ICON_SIZE_KUWASHIKU : ICON_SIZE_SUKKIRI;
   const iconBgRadius = () => iconFontSize() * ICON_BG_RADIUS_RATIO;
 
+  /** この period に属する events を時刻降順で返す。降順にすることで SVG document order の末尾
+   *  (= 最前面) に若い時刻が来て、同位置帯で重なった時に「早い時刻が手前」の stack 表示になる。 */
   const eventsForPeriod = createMemo<ScheduleEvent[]>(() => {
     const isPm = props.period === "pm";
     const result: ScheduleEvent[] = [];
@@ -139,8 +140,6 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
         result.push({ minutes, iconId: id });
       }
     }
-    // 時刻 降順でソート → SVG document order の末尾 (= 最前面) に若い時刻が来る。
-    // 同位置帯で重なった時に「早い時刻が手前」の stack 表示になる。
     result.sort((a, b) => b.minutes - a.minutes);
     return result;
   });
@@ -199,12 +198,12 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
     return { x: iconPos.x + DELETE_BUTTON_OFFSET, y: iconPos.y - DELETE_BUTTON_OFFSET };
   });
 
-  // event ごとの opacity 優先順:
-  //   お昼予定特例       → 絶対時刻 06:01〜17:59 のみ 1、それ以外は dimOpacity (active 側も上書き)
-  //   dimmed && !visible → dimOpacity (薄い側で予告外の予定)
-  //   dimmed && visible  → 1.0 (薄い側でも "もうすぐ起きる予定" はハッキリ)
-  //   !dimmed            → 1.0
-  // merged 表示中は親 wrapper opacity=0 で全体が隠れるので event 単位で隠す必要は無い。
+  /** event ごとの opacity 優先順:
+   *    1. お昼予定特例       — 絶対時刻 06:01〜17:59 のみ 1、それ以外は dimOpacity (active 側も上書き)
+   *    2. dimmed && !visible — dimOpacity (薄い側で予告外の予定)
+   *    3. dimmed && visible  — 1.0 (薄い側でも「もうすぐ起きる予定」はハッキリ)
+   *    4. !dimmed            — 1.0
+   *  merged 表示中は親 wrapper opacity=0 で全体が隠れるので event 単位で隠す必要は無い。 */
   const eventOpacity = (visibleInDim: boolean, eventM: number): number => {
     if (isLunchEvent(eventM)) {
       return isInLunchVisibleHours(props.displayedMinutes) ? 1 : (props.dimOpacity ?? 0.25);
@@ -243,9 +242,9 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
           )}
         </For>
 
-        {/* warning 中: SVG 全面の透明 rect で外タップを拾ってキャンセル。warning event がこの
-            レイヤーに属する時のみ描画 (両レイヤーで描画すると merged β の dim 側予定の ✕ が
-            上のレイヤーの cancel rect に覆われて押せなくなる)。 */}
+        {/* warning 中の外タップキャンセル用透明 rect。warning event がこのレイヤーに属する時のみ
+            描画する (両レイヤーで描画すると merged β の dim 側予定の ✕ が上のレイヤーの cancel rect
+            に覆われて押せなくなる)。 */}
         <Show when={activeInThisLayer()?.type === "warning"}>
           <rect
             x={0} y={0} width={VIEW} height={VIEW}
@@ -258,7 +257,6 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
           />
         </Show>
 
-        {/* ✕ボタン (warning event がこのレイヤーに属する時のみ、cancel rect の上に配置) */}
         <Show when={deleteButtonPos()}>
           {(pos) => (
             <g
@@ -319,12 +317,105 @@ interface EventIconProps {
   opacity: number;
 }
 
+/** warning 中に ±4° の往復を継続させる wobble (ホワホワ) アニメ。 */
+const setupWobbleAnim = (
+  groupRef: () => SVGGElement | undefined,
+  isWarning: () => boolean,
+) => {
+  let anim: Animation | null = null;
+  createEffect(() => {
+    const g = groupRef();
+    if (!g) return;
+    if (isWarning()) {
+      anim?.cancel();
+      anim = animateMotion(
+        g,
+        [{ transform: "rotate(-4deg)" }, { transform: "rotate(4deg)" }],
+        { duration: 180, iterations: Infinity, direction: "alternate", easing: "ease-in-out" },
+      );
+    } else {
+      anim?.cancel();
+      anim = null;
+    }
+  });
+  onCleanup(() => anim?.cancel());
+};
+
+/** deleting 開始で 1 回だけ走るくるくる〜パッ (poof) アニメ。 */
+const setupPoofAnim = (
+  groupRef: () => SVGGElement | undefined,
+  isDeleting: () => boolean,
+) => {
+  createEffect(on(isDeleting, (deleting) => {
+    const g = groupRef();
+    if (!g || !deleting) return;
+    animateMotion(
+      g,
+      [
+        { transform: "rotate(0deg) scale(1)", opacity: 1, offset: 0 },
+        { transform: "rotate(720deg) scale(1)", opacity: 1, offset: 0.65 },
+        { transform: "rotate(1080deg) scale(0)", opacity: 0, offset: 1 },
+      ],
+      { duration: POOF_DURATION_MS, easing: "linear", fill: "forwards" },
+    );
+  }));
+};
+
+/** マッチ window 入った瞬間に one-shot ポヨン3 を投入。自動回転で window が 50ms しか開かなくても
+ *  自身の duration (400ms) を完走する。下の継続 loop より「先に」呼ばないと、後発の continuous が
+ *  WAAPI composite で勝って one-shot が見えなくなる。defer なし: mount 時 isMatched=true (window
+ *  内で表示開始) でも発火させたい。 */
+const setupMatchEnterAnim = (
+  groupRef: () => SVGGElement | undefined,
+  isMatched: () => boolean,
+  isWarning: () => boolean,
+  isDeleting: () => boolean,
+) => {
+  createEffect(on(isMatched, (matched) => {
+    const g = groupRef();
+    if (!g || !matched) return;
+    if (isWarning() || isDeleting()) return;
+    animateMotion(g, POYON3_KEYFRAMES, { duration: POYON3_DURATION_MS, easing: "ease-out" });
+  }));
+};
+
+/** マッチ中の continuous loop (1 周期 = バウンス前半 42% + rest 後半 58%)。warning/deleting 中は
+ *  他アニメと干渉するので止める。 */
+const setupMatchLoopAnim = (
+  groupRef: () => SVGGElement | undefined,
+  isMatched: () => boolean,
+  isWarning: () => boolean,
+  isDeleting: () => boolean,
+) => {
+  let anim: Animation | null = null;
+  createEffect(() => {
+    const g = groupRef();
+    if (!g) return;
+    if (isWarning() || isDeleting()) {
+      anim?.cancel();
+      anim = null;
+      return;
+    }
+    if (isMatched()) {
+      if (!anim) {
+        anim = animateMotion(g, MATCH_LOOP_KEYFRAMES, {
+          duration: MATCH_LOOP_DURATION_MS,
+          iterations: Infinity,
+          easing: "ease-out",
+        });
+      }
+    } else {
+      anim?.cancel();
+      anim = null;
+    }
+  });
+  onCleanup(() => anim?.cancel());
+};
+
 const EventIcon: Component<EventIconProps> = (props) => {
   let groupRef: SVGGElement | undefined;
   let pressTimer: ReturnType<typeof setTimeout> | undefined;
   let longPressed = false;
-  let wobbleAnim: Animation | null = null;
-  let matchAnim: Animation | null = null;
 
   const def = () => getScheduleIcon(props.event.iconId);
 
@@ -337,40 +428,12 @@ const EventIcon: Component<EventIconProps> = (props) => {
     return i.type === "deleting" && i.minutes === props.event.minutes;
   });
 
-  // ホワホワ (wobble): warning 中は ±4° の往復アニメを継続。
-  createEffect(() => {
-    if (!groupRef) return;
-    if (isWarning()) {
-      wobbleAnim?.cancel();
-      wobbleAnim = animateMotion(
-        groupRef,
-        [{ transform: "rotate(-4deg)" }, { transform: "rotate(4deg)" }],
-        {
-          duration: 180,
-          iterations: Infinity,
-          direction: "alternate",
-          easing: "ease-in-out",
-        }
-      );
-    } else {
-      wobbleAnim?.cancel();
-      wobbleAnim = null;
-    }
-  });
-
-  // くるくる〜パッ: deleting 開始で 1 回だけ。0..65% は 720° 回転だけ、65..100% で +360° しつつ scale/opacity を 0 へ。
-  createEffect(on(isDeleting, (deleting) => {
-    if (!groupRef || !deleting) return;
-    animateMotion(
-      groupRef,
-      [
-        { transform: "rotate(0deg) scale(1)", opacity: 1, offset: 0 },
-        { transform: "rotate(720deg) scale(1)", opacity: 1, offset: 0.65 },
-        { transform: "rotate(1080deg) scale(0)", opacity: 0, offset: 1 },
-      ],
-      { duration: POOF_DURATION_MS, easing: "linear", fill: "forwards" }
-    );
-  }));
+  const refGetter = () => groupRef;
+  const matchedGetter = () => props.isMatched;
+  setupWobbleAnim(refGetter, isWarning);
+  setupPoofAnim(refGetter, isDeleting);
+  setupMatchEnterAnim(refGetter, matchedGetter, isWarning, isDeleting);
+  setupMatchLoopAnim(refGetter, matchedGetter, isWarning, isDeleting);
 
   const triggerPoyon3 = () => {
     if (!groupRef) return;
@@ -379,41 +442,6 @@ const EventIcon: Component<EventIconProps> = (props) => {
       easing: "ease-out",
     });
   };
-
-  // マッチ window 入った瞬間に one-shot ポヨン3 を投入。自動回転で window が 50ms しか開かなくても
-  // 自身の duration (400ms) を完走する。下の continuous loop effect より「先に」定義しないと、
-  // 後発の continuous が WAAPI composite で勝って one-shot が見えなくなる。
-  // defer なし: mount 時 isMatched=true (window 内で表示開始) でも発火させたい。
-  createEffect(on(
-    () => props.isMatched,
-    (matched) => {
-      if (!groupRef || !matched) return;
-      if (isWarning() || isDeleting()) return;
-      triggerPoyon3();
-    },
-  ));
-
-  // マッチ中 continuous: 1 周期 = バウンス前半 42% + rest 後半 58%。warning/deleting 中は他アニメと干渉するので止める。
-  createEffect(() => {
-    if (!groupRef) return;
-    if (isWarning() || isDeleting()) {
-      matchAnim?.cancel();
-      matchAnim = null;
-      return;
-    }
-    if (props.isMatched) {
-      if (!matchAnim) {
-        matchAnim = animateMotion(groupRef, MATCH_LOOP_KEYFRAMES, {
-          duration: MATCH_LOOP_DURATION_MS,
-          iterations: Infinity,
-          easing: "ease-out",
-        });
-      }
-    } else {
-      matchAnim?.cancel();
-      matchAnim = null;
-    }
-  });
 
   const onPointerDown = (e: PointerEvent) => {
     e.stopPropagation();
@@ -447,8 +475,6 @@ const EventIcon: Component<EventIconProps> = (props) => {
 
   onCleanup(() => {
     if (pressTimer) clearTimeout(pressTimer);
-    wobbleAnim?.cancel();
-    matchAnim?.cancel();
   });
 
   return (
@@ -468,7 +494,7 @@ const EventIcon: Component<EventIconProps> = (props) => {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       >
-        {/* 視認できる白円より大きい透明判定円。pointer-events: all で透明領域でもヒット
+        {/* 視認できる白円より大きい透明判定円。pointer-events: all で透明領域でもヒットさせる
             (default visiblePainted は alpha 0 でヒットしない)。 */}
         <circle
           cx={props.pos.x}
