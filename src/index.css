@@ -181,13 +181,6 @@ body.chronostasis .star-twinkle {
               opacity 380ms ease,
               filter 380ms ease;
 }
-/* AM/PM プレビュー押下中だけ opacity を即時切替 (戻すときは通常の 380ms フェード)。
-   ClockLayout 側で flipped 時に classList で付与する。 */
-.clock-wrapper-transition.opacity-instant {
-  transition: transform 560ms cubic-bezier(.34, 1.56, .64, 1),
-              opacity 0ms,
-              filter 380ms ease;
-}
 .clock-merged-container-transition {
   transition: opacity 380ms ease,
               transform 560ms cubic-bezier(.34, 1.56, .64, 1),
@@ -201,13 +194,15 @@ body.chronostasis .star-twinkle {
               transform 150ms ease,
               opacity 100ms ease;
 }
-/* AM/PM 切替時の dim 透明度 transition (= 元 .clock-wrapper-transition の opacity と同期)。
+/* selection dim (AM/PM どちら側が「いま」か) の opacity transition。
    ClockLayout 側で ClockFace/HandsLayer を包む div、ScheduleLayer 内の各 EventIcon の <g> に付与。
-   親に .opacity-instant が付いている時 (AM/PM プレビュー長押し中) は子側も 0ms 即時切替。 */
+   親 wrapper に .selection-dim-instant が付いている時は子側も 0ms 即時切替に上書き
+   (発動条件は ClockLayout 側を参照: AM/PM プレビュー押下中 / 自由回転 split で 12:00 跨ぎ時)。
+   merge dim (かさね/わけ) は wrapper 自身の opacity transition が担うので、ここでは扱わない。 */
 .fade-on-dim {
   transition: opacity 380ms ease;
 }
-.opacity-instant .fade-on-dim {
+.selection-dim-instant .fade-on-dim {
   transition: opacity 0ms;
 }
 
@@ -216,11 +211,10 @@ body.chronostasis .star-twinkle {
    そのコードを index.tsx で import している 1 行を消せばこのブロック全体が dormant になる
    (= class が付かないので何も上書きしない)。 */
 body.motion-reduce .clock-wrapper-transition,
-body.motion-reduce .clock-wrapper-transition.opacity-instant,
 body.motion-reduce .clock-merged-container-transition,
 body.motion-reduce .settings-button-transition,
 body.motion-reduce .fade-on-dim,
-body.motion-reduce .opacity-instant .fade-on-dim {
+body.motion-reduce .selection-dim-instant .fade-on-dim {
   transition: none;
 }
 body.motion-reduce ::view-transition-old(*),

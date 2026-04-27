@@ -71,7 +71,7 @@ export const ClockLayout: Component = () => {
   const actualIsAm = createMemo(() => displayed().hours < 12);
   const { isAm, startHold, clearHold } = useAmPmPreviewHold(actualIsAm);
   // 押下中だけ opacity 切替を即時に (戻すときは通常の 380ms フェード)。
-  // .opacity-instant 修飾クラス経由で実現 (index.css 参照)。
+  // .selection-dim-instant 修飾クラス経由で実現 (index.css 参照)。
   const previewFlipped = createMemo(() => isAm() !== actualIsAm());
 
   const amTime = createMemo(() => ({
@@ -240,17 +240,22 @@ export const ClockLayout: Component = () => {
   });
 
   // ===== かさね/わけ アニメーションと自動回転 =====
-  const { mergedVisible, transitioning } = useMergeAnimation();
+  const { mergedVisible, transitioning, mergedRevealed } = useMergeAnimation();
   useAutoRotateTick();
   useIdleExitTimer();
 
-  // ClockFace / HandsLayer 用の dim opacity (3 状態合成):
-  //   - merged 表示中 → 0 (split 時計は隠す)
-  //   - 反対側プレビュー長押し中 → 0.25 (薄く)
-  //   - 通常 → 1
-  // ScheduleLayer は dim 階層の外に置いて、内部で event ごとに opacity を決める (window 内は dim 無視)。
-  const amDimOpacity = createMemo(() => mergedVisible() ? 0 : (isAm() ? 1 : 0.25));
-  const pmDimOpacity = createMemo(() => mergedVisible() ? 0 : (isAm() ? 0.25 : 1));
+  // dim opacity を 2 軸に分離して構造で race を防ぐ:
+  //   軸 1: merge dim    — wrapper inline opacity (mergedVisible? 0 : 1) を CSS の
+  //                        .clock-wrapper-transition (opacity 380ms) で smooth fade。
+  //                        .selection-dim-instant の override 対象外なので transitioning の timing
+  //                        に左右されず常に滑らかに切替わる (= かさね/わけ切替時に AM/PM
+  //                        クロック自体がふわっとフェードイン/アウトする)。
+  //   軸 2: selection dim — 内側 DimOverlay の opacity (isAm? 1 : 0.25)。.fade-on-dim
+  //                        で 380ms。親 wrapper に .selection-dim-instant が付いている時のみ 0ms
+  //                        (= preview 押下中, 自由回転 split で 12:00 跨ぎ時)。
+  // 視覚的 opacity = wrapper opacity × inner opacity (CSS opacity 合成)。
+  const amSelectionOpacity = createMemo(() => isAm() ? 1 : 0.25);
+  const pmSelectionOpacity = createMemo(() => isAm() ? 0.25 : 1);
 
   return (
     <div class="w-full h-full overflow-hidden relative">
@@ -284,19 +289,16 @@ export const ClockLayout: Component = () => {
             "clock-wrapper-transition relative flex-1 flex flex-col items-center justify-center min-h-0 min-w-0 " +
             (isLandscape() ? "-mr-3" : "-mb-3")
           }
-          // .opacity-instant の発動条件は 2 つ:
+          // .selection-dim-instant 発動条件 (= 内側 .fade-on-dim を 0ms 即時切替に上書き):
           //   (1) AM/PM プレビュー長押し中 (押下=即時, 離す=380ms フェード)
           //   (2) 自由回転 split 中で merge transition 中ではない時
-          //       → 自動回転や drag/wheel で 12:00 を跨いだ瞬間の AM/PM dim 切替が
-          //         ふわっと (380ms) ではなくパッと (0ms) 切替わる。
-          //         merge↔split transition 中 (transitioning()) は smooth fade を維持。
-          classList={{ "opacity-instant": previewFlipped() || (rotateActive() && !transitioning()) }}
+          //       → 自動回転や drag/wheel で 12:00 を跨いだ瞬間の selection dim がパッと切替。
+          //       merge↔split transition 中 (transitioning()) は smooth fade を維持。
+          classList={{ "selection-dim-instant": previewFlipped() || (rotateActive() && !transitioning()) }}
           style={{
             transform: amTransform(mergedVisible(), isLandscape()),
-            // wrapper 自身の opacity は外した: ClockFace / HandsLayer は内側 dim div で個別に薄く、
-            // ScheduleLayer は dim 階層の外に置いて event ごとに opacity を制御する。
-            // これで「window 内の予定」は薄い側 (PM プレビュー時の AM など) でもハッキリ見える。
-            // .opacity-instant 中は子の .fade-on-dim が CSS セレクタで 0ms 即時切替に上書きされる。
+            // 軸 1: merge dim (上のコメント参照)
+            opacity: mergedVisible() ? 0 : 1,
             filter: splitShadow(transitioning()),
             "will-change": transitioning() ? "transform, opacity" : "auto",
           }}
@@ -306,7 +308,8 @@ export const ClockLayout: Component = () => {
                 - 自由回転 manual のドラッグ中は反対側 (= !isAm) を隠して合成負荷軽減
               ClockFace / ScheduleLayer / HandsLayer 全部にこの条件を適用する。 */}
           <Show when={(!mergedVisible() || transitioning()) && (isAm() || !dragging())}>
-            <DimOverlay opacity={amDimOpacity()}>
+            {/* 軸 2: selection dim (上のコメント参照) */}
+            <DimOverlay opacity={amSelectionOpacity()}>
               <ClockFace period="am" hours={amTime().hours} />
             </DimOverlay>
             {/* 予定アイコンは dim 階層の外。merge transition 中は外す (620ms の窓) */}
@@ -314,12 +317,11 @@ export const ClockLayout: Component = () => {
               <ScheduleLayer
                 period="am"
                 dimmed={!isAm()}
-                mergedHidden={mergedVisible()}
                 displayedMinutes={displayedMinutesTotal()}
               />
             </Show>
             {/* 針は予定アイコンの上に乗せる (DOM order が後ろ = z 上) */}
-            <DimOverlay opacity={amDimOpacity()}>
+            <DimOverlay opacity={amSelectionOpacity()}>
               <HandsLayer hours={amTime().hours} minutes={amTime().minutes} shakeKey={resistTrigger} />
             </DimOverlay>
           </Show>
@@ -333,29 +335,28 @@ export const ClockLayout: Component = () => {
             (isLandscape() ? "-ml-3" : "-mt-3")
           }
           // 発動条件は AM 側と同じ (上のコメント参照)。
-          classList={{ "opacity-instant": previewFlipped() || (rotateActive() && !transitioning()) }}
+          classList={{ "selection-dim-instant": previewFlipped() || (rotateActive() && !transitioning()) }}
           style={{
             transform: pmTransform(mergedVisible(), isLandscape()),
-            // AM と対称。wrapper 自身の opacity は外し、ClockFace/HandsLayer は内側 dim div で薄く、
-            // ScheduleLayer は外で event ごとに制御する (= window 内 event は薄い側でもハッキリ)。
+            // AM と対称 (上の AM wrapper のコメント参照)。
+            opacity: mergedVisible() ? 0 : 1,
             filter: splitShadow(transitioning()),
             "will-change": transitioning() ? "transform, opacity" : "auto",
           }}
         >
           {/* PM 側 (AM 側と対称) */}
           <Show when={(!mergedVisible() || transitioning()) && (!isAm() || !dragging())}>
-            <DimOverlay opacity={pmDimOpacity()}>
+            <DimOverlay opacity={pmSelectionOpacity()}>
               <ClockFace period="pm" hours={pmTime().hours} />
             </DimOverlay>
             <Show when={!transitioning()}>
               <ScheduleLayer
                 period="pm"
                 dimmed={isAm()}
-                mergedHidden={mergedVisible()}
                 displayedMinutes={displayedMinutesTotal()}
               />
             </Show>
-            <DimOverlay opacity={pmDimOpacity()}>
+            <DimOverlay opacity={pmSelectionOpacity()}>
               <HandsLayer hours={pmTime().hours} minutes={pmTime().minutes} shakeKey={resistTrigger} />
             </DimOverlay>
           </Show>
@@ -373,8 +374,12 @@ export const ClockLayout: Component = () => {
           }
           style={{
             // transition は .clock-merged-container-transition class 経由 (reduce-motion 対応のため)。
-            opacity: mergedVisible() ? 1 : 0,
-            transform: mergedTransform(mergedVisible()),
+            // mergedRevealed は mergedVisible に追従するが、false→true の rising edge だけ
+            // 1 frame 遅延する。これで fresh mount 時に opacity=0 / scale=0.55 で 1 paint
+            // 描画してから値が変化する → CSS transition が発火してふわっと現れる。
+            // (理由の詳細は features/free-rotation/merge-animation.ts を参照)
+            opacity: mergedRevealed() ? 1 : 0,
+            transform: mergedTransform(mergedRevealed()),
             "transform-origin": "center",
             filter: splitShadow(transitioning()),
             "will-change": transitioning() ? "transform, opacity" : "auto",

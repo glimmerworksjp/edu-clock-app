@@ -35,15 +35,13 @@ interface ScheduleLayerProps {
   /** レイヤー全体のスケール (1 で等倍)。merged β 表示の後ろレイヤーで奥行きを出す用。 */
   scale?: number;
   /** レイヤー全体に直接かける opacity (= wrapper div の opacity)。
-   *  merged β 表示の後ろレイヤーを薄くする等の用途。指定時は event-level の dimmed/mergedHidden より優先。 */
+   *  merged β 表示の後ろレイヤーを薄くする等の用途。指定時は event-level の dimmed より優先。 */
   opacity?: number;
   /** 親側が薄い側 (= 反対 period のプレビュー中、merged β の後ろレイヤー等) ならば true。
    *  window 外の event は dimOpacity に薄く、window 内の event は dim 無視で 1.0 に保つ。 */
   dimmed?: boolean;
   /** dimmed=true 時の event 薄さ (default 0.25)。merged β 後ろは 0.15 等で奥行きを強める。 */
   dimOpacity?: number;
-  /** merge 表示中 (= 中央 1 つの時計、AM/PM 分割は隠す) ならば true。全 event を opacity 0 に。 */
-  mergedHidden?: boolean;
   /** 現在表示中の時刻 (0..1439 の整数、分単位)。一致するイベントは continuous でポヨンポヨンする */
   displayedMinutes: number;
 }
@@ -234,13 +232,12 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
 
   // event ごとの opacity 決定。引数の visibleInDim は "dim 側でもハッキリ見せたいか" の判定結果
   // (= isWithinVisibilityWindow)。ポヨポヨ window とは別概念で広めに取られている。
-  //   mergedHidden       → 全部 0 (merge transition 中で分割表示を隠す)
   //   お昼予定特例       → 絶対時刻 06:01〜17:59 のみ 1、それ以外は dimOpacity (active 側も上書き)
   //   dimmed && !visible → dimOpacity (薄い側で予告外の予定)
   //   dimmed && visible  → 1.0 (薄い側でも "もうすぐ起きる予定" はハッキリ見せる)
   //   !dimmed            → 1.0 (アクティブ側は全 event 通常表示)
+  // merged 表示中は親 wrapper の opacity=0 で全体が隠れるので、event 単位で隠す必要は無い。
   const eventOpacity = (visibleInDim: boolean, eventM: number): number => {
-    if (props.mergedHidden) return 0;
     if (isLunchEvent(eventM)) {
       return isInLunchVisibleHours(props.displayedMinutes) ? 1 : (props.dimOpacity ?? 0.25);
     }
@@ -357,7 +354,7 @@ interface EventIconProps {
   /** 現在の displayed time がこのイベント時刻と一致しているか (連続ポヨンポヨン用) */
   isMatched: boolean;
   /** ScheduleLayer が決めたこの event 単体の表示 opacity (0..1)。
-   *  .fade-on-dim class で 380ms transition される (親 .opacity-instant 中は 0ms)。 */
+   *  .fade-on-dim class で 380ms transition される (親 .selection-dim-instant 中は 0ms)。 */
   opacity: number;
 }
 
