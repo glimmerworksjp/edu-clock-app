@@ -24,7 +24,7 @@ export interface ScheduleIconDef {
 }
 
 export const SCHEDULE_ICONS: readonly ScheduleIconDef[] = [
-  { id: "breakfast",  emoji: "🥞" },
+  { id: "breakfast",  emoji: "🥐" },
   { id: "lunch",      emoji: "🍙" },
   { id: "dinner",     emoji: "🍔" },
   { id: "snack",      emoji: "🍩" },
