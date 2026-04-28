@@ -1,4 +1,4 @@
-import { For, Show, onCleanup, onMount } from "solid-js";
+import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import type { Component } from "solid-js";
 import { SCHEDULE_ICONS, type ScheduleIconDef } from "../features/schedule/icons";
 import {
@@ -35,6 +35,11 @@ const ICON_FONT_TABLET = 38;
 const STAGGER_MS = 30;
 const APPEAR_DURATION_MS = 280;
 
+/** りせっとボタンを mount するまでの遅延。リング icon が全部出てから表示するのが目的。
+ *  よていボタン押下→picker open の click 合成イベントが overlay/中央に届くタイミングと race して
+ *  りせっとを誤発火するのを防ぐ意味も兼ねる (DOM に居なければ click は絶対に当たらない)。 */
+const RESET_BUTTON_MOUNT_DELAY_MS = (SCHEDULE_ICONS.length - 1) * STAGGER_MS + APPEAR_DURATION_MS;
+
 /** 「ドラッグ」と「タップ」を区別する閾値 (px)。 */
 const DRAG_THRESHOLD_PX = 5;
 /** マウスホイール感度 (deltaY 1 単位 → リング n° 回転)。 */
@@ -69,6 +74,14 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
 
   /** 予定が 1 件以上ある時だけ中央のりせっとボタンを出す (空のときは押せても何も起きないので隠す)。 */
   const hasAnyEvent = () => Object.keys(schedule()).length > 0;
+
+  /** リング icon が全部出てから true。reduce-motion 時は即時 true (アニメ無し = 待つ意味無し)。 */
+  const [resetButtonMounted, setResetButtonMounted] = createSignal(!motionAllowed());
+  let resetMountTimer: ReturnType<typeof setTimeout> | undefined;
+  onMount(() => {
+    if (!motionAllowed()) return;
+    resetMountTimer = setTimeout(() => setResetButtonMounted(true), RESET_BUTTON_MOUNT_DELAY_MS);
+  });
 
   /** Stagger 起点 index。portrait=12 時、landscape=3 時 (よていボタンが画面上端でリング上半分が画面外
    *  なので、12 時から stagger すると最初の数 frame が見えない位置で動く → 画面内に確実に見える 3 時から
@@ -227,6 +240,7 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
   onCleanup(() => {
     cancelInertia();
     cancelPendingRotation();
+    if (resetMountTimer) clearTimeout(resetMountTimer);
   });
 
   return (
@@ -274,11 +288,15 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
 
       {/* 中央のりせっとボタン。よていボタンに被さる位置 (origin = よていボタン中心) に同じ pill 形で
           配置。回転リングの外に置いて回転に巻き込まれないようにする。予定 0 件のときは disabled で
-          表示 (押せないし見た目もグレー)。 */}
-      <ResetButton
-        origin={props.origin}
-        disabled={!hasAnyEvent()}
-      />
+          表示 (押せないし見た目もグレー)。
+          リング icon が全部出るまで mount 自体を遅延 (Show で DOM に居ない) させて、よていボタン押下
+          → picker open の click 合成イベントが中央に届いてりせっとを誤発火する race を防ぐ。 */}
+      <Show when={resetButtonMounted()}>
+        <ResetButton
+          origin={props.origin}
+          disabled={!hasAnyEvent()}
+        />
+      </Show>
     </div>
   );
 };
