@@ -10,6 +10,7 @@ import {
   triggerResetDelete,
   RESET_STAGGER_MS,
 } from "../features/schedule/interaction";
+import { rotateActive } from "../features/free-rotation/state";
 import { detailMode } from "../features/settings/detail-mode";
 import { animateMotion } from "../lib/motion";
 
@@ -533,6 +534,9 @@ const EventIcon: Component<EventIconProps> = (props) => {
   };
 
   const onPointerDown = (e: PointerEvent) => {
+    // 回転モード中は icon を素通しさせて container 側に渡す
+    // (auto→manual 切替や drag を妨げないため)。長押し/タップ警告/タップ poyon も全部 skip。
+    if (rotateActive()) return;
     e.stopPropagation();
     const i = interaction();
     // りせっと警告中は任意のアイコンタップで全消し開始。
@@ -550,6 +554,7 @@ const EventIcon: Component<EventIconProps> = (props) => {
   };
 
   const onPointerUp = (e: PointerEvent) => {
+    if (rotateActive()) return; // 回転モード中は何もしない (pointerdown も素通しなのでタイマー無し)
     e.stopPropagation();
     if (pressTimer) {
       clearTimeout(pressTimer);
