@@ -1,6 +1,8 @@
 /* @refresh reload */
 import { render } from "solid-js/web";
 import "./index.css";
+// kiosk-style 全画面ロック (position: fixed body + touch-action 系)。この行を消せば dormant。
+import "./lib/kiosk-bootstrap";
 // prefers-reduced-motion 対応: この行を消せば全機能 dormant。完全削除する場合は src/lib/motion.ts と
 // motion-bootstrap.ts を消し、animateMotion 呼び出しを el.animate に戻し、index.css の
 // body.motion-reduce ブロックを消す。

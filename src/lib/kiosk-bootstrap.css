@@ -1,0 +1,22 @@
+/* Kiosk-style 全画面ロック。
+ *
+ * position: fixed + inset: 0 で body を viewport に固定し scroll 文脈を完全に消す。
+ * overflow: hidden 単体では mobile browser (DuckDuckGo の URL bar 自動隠蔽 / iOS Safari の
+ * rubber-banding / Android Chrome の pull-to-refresh) が gesture 層で縦ドラッグを scroll と
+ * 解釈してしまうため、 body を「scroll できる文脈ではない」 と完全に宣言するために fixed 化する。
+ *
+ * Vite + 任意 SPA framework (Solid / React / Vue / Svelte) の default template はどれも
+ * 普通の web ページ前提で kiosk lock は入っていない。 Flutter Web は逆に framework 自体が
+ * 全画面 app を前提としており bootstrap script で同等の CSS を自動 inject するので Flutter dev は
+ * 意識せずに済むが、 SPA framework で kiosk app を作る場合は明示的に踏襲する必要がある。
+ *
+ * touch-action: none と overscroll-behavior: none は二重保険として併記。 button は
+ * src/index.css 側の touch-action: manipulation rule で override されてタップは効く。 */
+
+html, body, #root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  overscroll-behavior: none;
+}
