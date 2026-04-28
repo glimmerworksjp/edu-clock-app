@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "برنامه",
+    "reset": "پاک کن",
     "icon": {
       "breakfast": "صبحانه",
       "lunch": "ناهار",

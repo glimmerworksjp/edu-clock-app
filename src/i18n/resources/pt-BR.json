@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "plano",
+    "reset": "limpar",
     "icon": {
       "breakfast": "café",
       "lunch": "almoço",

@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "일정",
+    "reset": "리셋",
     "icon": {
       "breakfast": "아침",
       "lunch": "점심",

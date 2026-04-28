@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "प्लान",
+    "reset": "रीसेट",
     "icon": {
       "breakfast": "नाश्ता",
       "lunch": "लंच",

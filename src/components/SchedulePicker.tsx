@@ -9,7 +9,8 @@ import {
   rotatePicker,
   type PickerOrigin,
 } from "../features/schedule/picker";
-import { setScheduleAt } from "../features/schedule/state";
+import { setScheduleAt, schedule } from "../features/schedule/state";
+import { enterResetWarning } from "../features/schedule/interaction";
 import { rotateMinutes } from "../features/free-rotation/state";
 import { useIsTablet } from "../hooks/useIsTablet";
 import { useOrientation } from "../hooks/useOrientation";
@@ -21,6 +22,7 @@ import { animateMotion, motionAllowed } from "../lib/motion";
  * 開閉アニメは origin → 各アイコン位置に放射状にニュッと出る (stagger 30ms, CW 順)。
  * ドラッグは origin 中心の角度差をそのまま回転に渡す全域 angular 操作、ホイールは別枠で deltaY を回転に。
  * アイコンタップで rotateMinutes() に予定追加 + 閉じる、Overlay 空タップで閉じる。
+ * リング中央には予定が 1 件以上ある時だけ「りせっと」ボタンが出て、押すと全予定が削除警告に入る。
  */
 
 /** SettingsPanel の四隅ボタンと同じ tablet ブレイクポイントで大きくする。 */
@@ -64,6 +66,9 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
   const ringRadius = () => isTablet() ? RING_RADIUS_TABLET : RING_RADIUS_MOBILE;
   const iconSize = () => isTablet() ? ICON_SIZE_TABLET : ICON_SIZE_MOBILE;
   const iconFont = () => isTablet() ? ICON_FONT_TABLET : ICON_FONT_MOBILE;
+
+  /** 予定が 1 件以上ある時だけ中央のりせっとボタンを出す (空のときは押せても何も起きないので隠す)。 */
+  const hasAnyEvent = () => Object.keys(schedule()).length > 0;
 
   /** Stagger 起点 index。portrait=12 時、landscape=3 時 (よていボタンが画面上端でリング上半分が画面外
    *  なので、12 時から stagger すると最初の数 frame が見えない位置で動く → 画面内に確実に見える 3 時から
@@ -266,6 +271,14 @@ const RingMenu: Component<{ origin: PickerOrigin }> = (props) => {
           )}
         </For>
       </div>
+
+      {/* 中央のりせっとボタン。よていボタンに被さる位置 (origin = よていボタン中心) に同じ pill 形で
+          配置。回転リングの外に置いて回転に巻き込まれないようにする。予定 0 件のときは disabled で
+          表示 (押せないし見た目もグレー)。 */}
+      <ResetButton
+        origin={props.origin}
+        disabled={!hasAnyEvent()}
+      />
     </div>
   );
 };
@@ -344,6 +357,74 @@ const RingIcon: Component<{
     >
       {props.icon.emoji}
     </button>
+  );
+};
+
+/**
+ * リング中央のりせっとボタン。よていボタンと同じ pill 形 (横長、改行なし) で同じ位置に重ねる。
+ * aria-label の文字をグローバル ::before で描画 (index.css の `button[aria-label]::before` 参照)。
+ * クリックで全予定を warning 状態に入れて picker を閉じる。disabled (予定 0 件) のときはグレーで
+ * 表示し click も無効。padding/text-size は SettingsPanel の btnClass と揃える。
+ */
+const ResetButton: Component<{
+  origin: PickerOrigin;
+  disabled: boolean;
+}> = (props) => {
+  let buttonRef: HTMLButtonElement | undefined;
+  const { t } = useI18n();
+
+  /** 出現アニメ: scale 0→1。中央位置は固定なので translate は最終 transform と同じ。 */
+  onMount(() => {
+    if (!buttonRef) return;
+    animateMotion(
+      buttonRef,
+      [
+        { transform: "translate(-50%, -50%) scale(0)", opacity: 0 },
+        { transform: "translate(-50%, -50%) scale(1)", opacity: 1 },
+      ],
+      {
+        duration: APPEAR_DURATION_MS,
+        easing: "cubic-bezier(.34,1.56,.64,1)",
+        fill: "backwards",
+      },
+    );
+  });
+
+  /** overlay の drag/click ハンドラに巻き込まれないよう pointerdown も click も止める
+   *  (disabled でも click は飛んでこないが pointerdown は飛ぶので overlay に届かないように)。 */
+  const onPointerDown = (e: PointerEvent) => {
+    e.stopPropagation();
+  };
+
+  /** disabled だと click 自体ブラウザで発火しないので分岐は防御目的のみ。 */
+  const onClick = (e: MouseEvent) => {
+    e.stopPropagation();
+    if (props.disabled) return;
+    closePicker();
+    enterResetWarning();
+  };
+
+  return (
+    <button
+      ref={buttonRef}
+      class="fixed px-2.5 py-1 tablet:px-6 tablet:py-4 rounded-full text-base tablet:text-xl font-bold whitespace-nowrap"
+      style={{
+        left: `${props.origin.x}px`,
+        top: `${props.origin.y}px`,
+        transform: "translate(-50%, -50%)",
+        // disabled でも opaque (よていボタンに被せるので透けると下のラベルが透けて見える)。
+        background: props.disabled ? "#f3f4f6" : "#ffffff",
+        color: props.disabled ? "#9ca3af" : "#C01030",
+        border: `2px solid ${props.disabled ? "#d1d5db" : "#FF4060"}`,
+        "box-shadow": props.disabled ? "none" : "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)",
+        cursor: props.disabled ? "not-allowed" : "pointer",
+        "will-change": "transform",
+      }}
+      onPointerDown={onPointerDown}
+      onClick={onClick}
+      disabled={props.disabled}
+      aria-label={t("schedule.reset")}
+    />
   );
 };
 

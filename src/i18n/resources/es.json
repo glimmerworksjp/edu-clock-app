@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "plan",
+    "reset": "borrar",
     "icon": {
       "breakfast": "desayuno",
       "lunch": "almuerzo",

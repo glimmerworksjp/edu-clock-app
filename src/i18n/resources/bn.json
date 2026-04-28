@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "প্ল্যান",
+    "reset": "রিসেট",
     "icon": {
       "breakfast": "নাশতা",
       "lunch": "দুপুরের খাবার",

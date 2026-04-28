@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "خطة",
+    "reset": "مسح",
     "icon": {
       "breakfast": "فطور",
       "lunch": "غداء",

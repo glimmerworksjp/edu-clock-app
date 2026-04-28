@@ -51,3 +51,8 @@ export const deleteScheduleAt = (minutes: number) => {
     return rest;
   });
 };
+
+/** 全予定を一括削除 (りせっと用)。 */
+export const deleteAllSchedule = () => {
+  setScheduleRaw({});
+};

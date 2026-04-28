@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "programme",
+    "reset": "vider",
     "icon": {
       "breakfast": "petit-déj",
       "lunch": "déjeuner",

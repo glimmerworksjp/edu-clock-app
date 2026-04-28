@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "แผน",
+    "reset": "ล้าง",
     "icon": {
       "breakfast": "อาหารเช้า",
       "lunch": "อาหารกลางวัน",

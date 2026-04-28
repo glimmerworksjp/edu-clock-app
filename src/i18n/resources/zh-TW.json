@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "計劃",
+    "reset": "清空",
     "icon": {
       "breakfast": "早餐",
       "lunch": "午餐",

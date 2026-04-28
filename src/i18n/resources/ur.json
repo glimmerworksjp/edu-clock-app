@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "منصوبہ",
+    "reset": "ری سیٹ",
     "icon": {
       "breakfast": "ناشتہ",
       "lunch": "لنچ",

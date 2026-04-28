@@ -7,6 +7,8 @@ import {
   enterWarning,
   cancelWarning,
   triggerDelete,
+  triggerResetDelete,
+  RESET_STAGGER_MS,
 } from "../features/schedule/interaction";
 import { detailMode } from "../features/settings/detail-mode";
 import { animateMotion } from "../lib/motion";
@@ -15,8 +17,11 @@ import { animateMotion } from "../lib/motion";
  * 時計の上に予定アイコンを描画するレイヤー。ClockFace を包む div の中に絶対配置で重ねる
  * (ClockFace SVG とは独立 SVG)。同じ viewBox (340x340) を使うので座標系が一致する。
  *
- * インタラクション: 短押しで poyon、長押し 500ms で warning (右上に ✕ ボタン)、✕ タップで削除
- * アニメ後にデータ削除。warning は外タップ or 3 秒経過でキャンセル。
+ * インタラクション:
+ *  - 短押しで poyon、長押し 500ms で warning (右上に ✕ ボタン)、✕ タップで削除アニメ後にデータ削除
+ *  - warning は外タップ or 3 秒経過でキャンセル
+ *  - りせっと中 (resetWarning) は全アイコンが wobble + 各々に ✕ ボタンが出る。任意の予定 or ✕ タップで
+ *    時刻順 50ms stagger でくるくる消える。外タップ or 3 秒で全体キャンセル
  */
 
 interface ScheduleLayerProps {
@@ -81,6 +86,11 @@ const MATCH_LOOP_KEYFRAMES: Keyframe[] = [
 
 /** くるくる〜パッ (削除アニメ)。0..65% で 720° 回転、65..100% で +360° しながら scale/opacity を 0 へ。 */
 const POOF_DURATION_MS = 900;
+const POOF_KEYFRAMES: Keyframe[] = [
+  { transform: "rotate(0deg) scale(1)", opacity: 1, offset: 0 },
+  { transform: "rotate(720deg) scale(1)", opacity: 1, offset: 0.65 },
+  { transform: "rotate(1080deg) scale(0)", opacity: 0, offset: 1 },
+];
 
 /** displayed - eventM の差を [-720, 720] に正規化 (0/1440 跨ぎ対応)。 */
 const wrapMinuteDiff = (diff: number): number => {
@@ -128,6 +138,11 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
   const iconRadius = () => isKuwashiku() ? ICON_RADIUS_KUWASHIKU : ICON_RADIUS_SUKKIRI;
   const iconFontSize = () => isKuwashiku() ? ICON_SIZE_KUWASHIKU : ICON_SIZE_SUKKIRI;
   const iconBgRadius = () => iconFontSize() * ICON_BG_RADIUS_RATIO;
+
+  /** 全予定の時刻を昇順で持つ配列。EventIcon が自分の chronologicalRank を引くのに使う。 */
+  const sortedAllMinutes = createMemo(() => {
+    return Object.keys(schedule()).map(Number).sort((a, b) => a - b);
+  });
 
   /** この period に属する events を時刻降順で返す。降順にすることで SVG document order の末尾
    *  (= 最前面) に若い時刻が来て、同位置帯で重なった時に「早い時刻が手前」の stack 表示になる。 */
@@ -180,10 +195,12 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
     return `${leftX},${leftY} ${rightX},${rightY} ${apexX},${apexY}`;
   };
 
-  /** warning/deleting 中のイベントがこのレイヤーに属するか (= ✕ボタンを出すか)。 */
+  /** warning/deleting 中のイベントがこのレイヤーに属するか (= ✕ボタンを出すか)。resetWarning /
+   *  resetDeleting は両 period に属する。 */
   const activeInThisLayer = createMemo(() => {
     const i = interaction();
     if (i.type === "none") return null;
+    if (i.type === "resetWarning" || i.type === "resetDeleting") return i;
     const isAm = i.minutes < 720;
     if ((props.period === "am" && isAm) || (props.period === "pm" && !isAm)) {
       return i;
@@ -191,6 +208,7 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
     return null;
   });
 
+  /** 単発 warning の ✕ ボタン位置 (resetWarning の per-event ✕ は別経路で出す)。 */
   const deleteButtonPos = createMemo(() => {
     const a = activeInThisLayer();
     if (!a || a.type !== "warning") return null;
@@ -225,6 +243,21 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
         class="w-full h-full"
         style="max-height: 100%; max-width: 100%;"
       >
+        {/* りせっと中の外タップキャンセル用透明 rect。アイコンより前に置くことで「アイコンタップ→
+            triggerResetDelete」「外タップ→cancelWarning」を両立 (アイコンが上に乗っているので
+            アイコン領域は rect に届かない)。 */}
+        <Show when={activeInThisLayer()?.type === "resetWarning"}>
+          <rect
+            x={0} y={0} width={VIEW} height={VIEW}
+            fill="transparent"
+            style={{ "pointer-events": "all" }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              cancelWarning();
+            }}
+          />
+        </Show>
+
         <For each={eventsForPeriod()}>
           {(event) => (
             <EventIcon
@@ -234,6 +267,7 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
               iconBgRadius={iconBgRadius()}
               iconFontSize={iconFontSize()}
               isMatched={isWithinMatchWindow(props.displayedMinutes, event.minutes)}
+              chronologicalRank={sortedAllMinutes().indexOf(event.minutes)}
               opacity={eventOpacity(
                 isWithinVisibilityWindow(props.displayedMinutes, event.minutes),
                 event.minutes,
@@ -242,9 +276,10 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
           )}
         </For>
 
-        {/* warning 中の外タップキャンセル用透明 rect。warning event がこのレイヤーに属する時のみ
+        {/* 単発 warning の外タップキャンセル用透明 rect。warning event がこのレイヤーに属する時のみ
             描画する (両レイヤーで描画すると merged β の dim 側予定の ✕ が上のレイヤーの cancel rect
-            に覆われて押せなくなる)。 */}
+            に覆われて押せなくなる)。アイコンより後に置くことでアイコンタップも cancel に倒す
+            (= 単発 warning 中はアイコン本体タップでも cancel)。 */}
         <Show when={activeInThisLayer()?.type === "warning"}>
           <rect
             x={0} y={0} width={VIEW} height={VIEW}
@@ -259,48 +294,79 @@ const ScheduleLayer: Component<ScheduleLayerProps> = (props) => {
 
         <Show when={deleteButtonPos()}>
           {(pos) => (
-            <g
-              style={{ "pointer-events": "all", cursor: "pointer" }}
-              onPointerDown={(e) => {
-                e.stopPropagation();
+            <DeleteButton
+              cx={pos().x}
+              cy={pos().y}
+              onTrigger={() => {
                 const a = activeInThisLayer();
                 if (a && a.type === "warning") triggerDelete(a.minutes);
               }}
-            >
-              {/* 視認できる赤円より大きい透明判定円 (子どもの指で当てやすく) */}
-              <circle
-                cx={pos().x}
-                cy={pos().y}
-                r={DELETE_BUTTON_TOUCH_RADIUS}
-                fill="transparent"
-                style={{ "pointer-events": "all" }}
-              />
-              <circle cx={pos().x} cy={pos().y} r={DELETE_BUTTON_RADIUS + 1} fill="#C01030" />
-              <circle cx={pos().x} cy={pos().y} r={DELETE_BUTTON_RADIUS} fill="#FF4060" />
-              {/* ✕ は line ペアで描く (text "✕" よりクロス角度がきれい) */}
-              <line
-                x1={pos().x - DELETE_BUTTON_RADIUS * 0.45}
-                y1={pos().y - DELETE_BUTTON_RADIUS * 0.45}
-                x2={pos().x + DELETE_BUTTON_RADIUS * 0.45}
-                y2={pos().y + DELETE_BUTTON_RADIUS * 0.45}
-                stroke="#222222"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-              <line
-                x1={pos().x - DELETE_BUTTON_RADIUS * 0.45}
-                y1={pos().y + DELETE_BUTTON_RADIUS * 0.45}
-                x2={pos().x + DELETE_BUTTON_RADIUS * 0.45}
-                y2={pos().y - DELETE_BUTTON_RADIUS * 0.45}
-                stroke="#222222"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-            </g>
+            />
           )}
+        </Show>
+
+        {/* りせっと中: 全 event に ✕ ボタンを出す。タップで triggerResetDelete (全消し)。 */}
+        <Show when={activeInThisLayer()?.type === "resetWarning"}>
+          <For each={eventsForPeriod()}>
+            {(event) => {
+              const iconPos = positionOf(event.minutes);
+              return (
+                <DeleteButton
+                  cx={iconPos.x + DELETE_BUTTON_OFFSET}
+                  cy={iconPos.y - DELETE_BUTTON_OFFSET}
+                  onTrigger={triggerResetDelete}
+                />
+              );
+            }}
+          </For>
         </Show>
       </svg>
     </div>
+  );
+};
+
+/** ✕ ボタン (赤円 + 白縁取り + ✕ 線)。タップ判定円を視認円より大きく取って子どもの指でも当てやすく。 */
+const DeleteButton: Component<{
+  cx: number;
+  cy: number;
+  onTrigger: () => void;
+}> = (props) => {
+  return (
+    <g
+      style={{ "pointer-events": "all", cursor: "pointer" }}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        props.onTrigger();
+      }}
+    >
+      <circle
+        cx={props.cx}
+        cy={props.cy}
+        r={DELETE_BUTTON_TOUCH_RADIUS}
+        fill="transparent"
+        style={{ "pointer-events": "all" }}
+      />
+      <circle cx={props.cx} cy={props.cy} r={DELETE_BUTTON_RADIUS + 1} fill="#C01030" />
+      <circle cx={props.cx} cy={props.cy} r={DELETE_BUTTON_RADIUS} fill="#FF4060" />
+      <line
+        x1={props.cx - DELETE_BUTTON_RADIUS * 0.45}
+        y1={props.cy - DELETE_BUTTON_RADIUS * 0.45}
+        x2={props.cx + DELETE_BUTTON_RADIUS * 0.45}
+        y2={props.cy + DELETE_BUTTON_RADIUS * 0.45}
+        stroke="#222222"
+        stroke-width="2"
+        stroke-linecap="round"
+      />
+      <line
+        x1={props.cx - DELETE_BUTTON_RADIUS * 0.45}
+        y1={props.cy + DELETE_BUTTON_RADIUS * 0.45}
+        x2={props.cx + DELETE_BUTTON_RADIUS * 0.45}
+        y2={props.cy - DELETE_BUTTON_RADIUS * 0.45}
+        stroke="#222222"
+        stroke-width="2"
+        stroke-linecap="round"
+      />
+    </g>
   );
 };
 
@@ -312,21 +378,24 @@ interface EventIconProps {
   iconFontSize: number;
   /** 現在の displayed time がこのイベント時刻と一致しているか (連続ポヨポヨ用)。 */
   isMatched: boolean;
+  /** 全予定の中での時刻順位 (0 が最も早い)。りせっと削除時の poof アニメ stagger 算出に使う。 */
+  chronologicalRank: number;
   /** ScheduleLayer が決めたこの event 単体の表示 opacity (0..1)。
    *  .fade-on-dim class で 380ms transition (親 .selection-dim-instant 中は 0ms)。 */
   opacity: number;
 }
 
-/** warning 中に ±4° の往復を継続させる wobble (ホワホワ) アニメ。 */
+/** warning 中に ±4° の往復を継続させる wobble (ホワホワ) アニメ。resetDeleting 中も自分の poof が
+ *  始まるまで wobble を続ける (poof 開始時に WAAPI の later-animation-wins で transform が乗っ取られる)。 */
 const setupWobbleAnim = (
   groupRef: () => SVGGElement | undefined,
-  isWarning: () => boolean,
+  isWobbling: () => boolean,
 ) => {
   let anim: Animation | null = null;
   createEffect(() => {
     const g = groupRef();
     if (!g) return;
-    if (isWarning()) {
+    if (isWobbling()) {
       anim?.cancel();
       anim = animateMotion(
         g,
@@ -341,22 +410,20 @@ const setupWobbleAnim = (
   onCleanup(() => anim?.cancel());
 };
 
-/** deleting 開始で 1 回だけ走るくるくる〜パッ (poof) アニメ。 */
+/** deleting 開始で 1 回だけ走るくるくる〜パッ (poof) アニメ。delayMs が指定されている場合は WAAPI の
+ *  delay で開始タイミングをずらす (りせっと時の時刻順 stagger 用)。delay 中は wobble が見え続ける。 */
 const setupPoofAnim = (
   groupRef: () => SVGGElement | undefined,
   isDeleting: () => boolean,
+  delayMs: () => number,
 ) => {
   createEffect(on(isDeleting, (deleting) => {
     const g = groupRef();
     if (!g || !deleting) return;
     animateMotion(
       g,
-      [
-        { transform: "rotate(0deg) scale(1)", opacity: 1, offset: 0 },
-        { transform: "rotate(720deg) scale(1)", opacity: 1, offset: 0.65 },
-        { transform: "rotate(1080deg) scale(0)", opacity: 0, offset: 1 },
-      ],
-      { duration: POOF_DURATION_MS, easing: "linear", fill: "forwards" },
+      POOF_KEYFRAMES,
+      { duration: POOF_DURATION_MS, easing: "linear", fill: "forwards", delay: delayMs() },
     );
   }));
 };
@@ -368,13 +435,13 @@ const setupPoofAnim = (
 const setupMatchEnterAnim = (
   groupRef: () => SVGGElement | undefined,
   isMatched: () => boolean,
-  isWarning: () => boolean,
+  isWobbling: () => boolean,
   isDeleting: () => boolean,
 ) => {
   createEffect(on(isMatched, (matched) => {
     const g = groupRef();
     if (!g || !matched) return;
-    if (isWarning() || isDeleting()) return;
+    if (isWobbling() || isDeleting()) return;
     animateMotion(g, POYON3_KEYFRAMES, { duration: POYON3_DURATION_MS, easing: "ease-out" });
   }));
 };
@@ -384,14 +451,14 @@ const setupMatchEnterAnim = (
 const setupMatchLoopAnim = (
   groupRef: () => SVGGElement | undefined,
   isMatched: () => boolean,
-  isWarning: () => boolean,
+  isWobbling: () => boolean,
   isDeleting: () => boolean,
 ) => {
   let anim: Animation | null = null;
   createEffect(() => {
     const g = groupRef();
     if (!g) return;
-    if (isWarning() || isDeleting()) {
+    if (isWobbling() || isDeleting()) {
       anim?.cancel();
       anim = null;
       return;
@@ -419,21 +486,36 @@ const EventIcon: Component<EventIconProps> = (props) => {
 
   const def = () => getScheduleIcon(props.event.iconId);
 
-  const isWarning = createMemo(() => {
+  /** wobble (ホワホワ) を出す状態。単発 warning (自分が対象) / りせっと中の resetWarning / resetDeleting
+   *  (自分の poof が delay 後に走るまでは wobble を継続させる)。 */
+  const isWobbling = createMemo(() => {
     const i = interaction();
-    return i.type === "warning" && i.minutes === props.event.minutes;
+    if (i.type === "warning" && i.minutes === props.event.minutes) return true;
+    if (i.type === "resetWarning") return true;
+    if (i.type === "resetDeleting") return true;
+    return false;
   });
+
   const isDeleting = createMemo(() => {
     const i = interaction();
-    return i.type === "deleting" && i.minutes === props.event.minutes;
+    if (i.type === "deleting" && i.minutes === props.event.minutes) return true;
+    if (i.type === "resetDeleting") return true;
+    return false;
+  });
+
+  /** りせっと削除中だけ自分の chronologicalRank に応じた delay を返す。単発 deleting は delay 0。 */
+  const poofDelayMs = createMemo(() => {
+    const i = interaction();
+    if (i.type === "resetDeleting") return props.chronologicalRank * RESET_STAGGER_MS;
+    return 0;
   });
 
   const refGetter = () => groupRef;
   const matchedGetter = () => props.isMatched;
-  setupWobbleAnim(refGetter, isWarning);
-  setupPoofAnim(refGetter, isDeleting);
-  setupMatchEnterAnim(refGetter, matchedGetter, isWarning, isDeleting);
-  setupMatchLoopAnim(refGetter, matchedGetter, isWarning, isDeleting);
+  setupWobbleAnim(refGetter, isWobbling);
+  setupPoofAnim(refGetter, isDeleting, poofDelayMs);
+  setupMatchEnterAnim(refGetter, matchedGetter, isWobbling, isDeleting);
+  setupMatchLoopAnim(refGetter, matchedGetter, isWobbling, isDeleting);
 
   const triggerPoyon3 = () => {
     if (!groupRef) return;
@@ -445,8 +527,14 @@ const EventIcon: Component<EventIconProps> = (props) => {
 
   const onPointerDown = (e: PointerEvent) => {
     e.stopPropagation();
-    // 別イベントが warning/deleting 中は新規操作を受け付けない。
-    if (interaction().type !== "none") return;
+    const i = interaction();
+    // りせっと警告中は任意のアイコンタップで全消し開始。
+    if (i.type === "resetWarning") {
+      triggerResetDelete();
+      return;
+    }
+    // 別イベントが warning/deleting/resetDeleting 中は新規操作を受け付けない。
+    if (i.type !== "none") return;
     longPressed = false;
     pressTimer = setTimeout(() => {
       longPressed = true;

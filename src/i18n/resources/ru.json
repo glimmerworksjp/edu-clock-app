@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "план",
+    "reset": "сброс",
     "icon": {
       "breakfast": "завтрак",
       "lunch": "обед",

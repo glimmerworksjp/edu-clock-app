@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "计划",
+    "reset": "清空",
     "icon": {
       "breakfast": "早饭",
       "lunch": "午饭",

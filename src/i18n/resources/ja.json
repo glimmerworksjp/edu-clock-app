@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "よてい",
+    "reset": "りせっと",
     "icon": {
       "breakfast": "あさごはん",
       "lunch": "おひるごはん",

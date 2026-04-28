@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "Plan",
+    "reset": "leeren",
     "icon": {
       "breakfast": "Frühstück",
       "lunch": "Mittag",

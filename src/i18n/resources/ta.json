@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "திட்டம்",
+    "reset": "அழி",
     "icon": {
       "breakfast": "காலை உணவு",
       "lunch": "மதிய உணவு",

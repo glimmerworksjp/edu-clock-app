@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { deleteScheduleAt } from "./state";
+import { deleteScheduleAt, deleteAllSchedule, schedule } from "./state";
 import { motionAllowed } from "../../lib/motion";
 
 /**
@@ -9,17 +9,25 @@ import { motionAllowed } from "../../lib/motion";
  *                              ├──外タップ──> none
  *                              └──3 秒タイムアウト──> none
  *
- * グローバル単一状態 (同時に warning にできるイベントは 1 つだけ)。生 setter は未 export。
+ *   none ──りせっと押下──> resetWarning ──いずれかタップ──> resetDeleting ──時刻順 stagger 完了──> none
+ *                                ├──外タップ──> none
+ *                                └──3 秒タイムアウト──> none
+ *
+ * グローバル単一状態。生 setter は未 export。resetWarning/resetDeleting は全予定が対象。
  */
 
 type Interaction =
   | { type: "none" }
   | { type: "warning"; minutes: number }
-  | { type: "deleting"; minutes: number };
+  | { type: "deleting"; minutes: number }
+  | { type: "resetWarning" }
+  | { type: "resetDeleting" };
 
 const WARNING_AUTO_CANCEL_MS = 3000;
 /** くるくる削除アニメの全体 duration と揃える (ScheduleLayer の POOF_DURATION_MS)。 */
 const DELETE_ANIMATION_MS = 900;
+/** りせっと削除時の 1 イベントあたり stagger (時刻順)。 */
+export const RESET_STAGGER_MS = 50;
 
 const [interaction, setInteractionRaw] = createSignal<Interaction>({ type: "none" });
 let warningTimer: ReturnType<typeof setTimeout> | undefined;
@@ -38,11 +46,12 @@ export const enterWarning = (minutes: number) => {
   }, WARNING_AUTO_CANCEL_MS);
 };
 
-/** 外タップやキャンセル時に呼ぶ。warning 中なら none に戻す。 */
+/** 外タップやキャンセル時に呼ぶ。warning / resetWarning 中なら none に戻す。 */
 export const cancelWarning = () => {
   if (warningTimer) clearTimeout(warningTimer);
   warningTimer = undefined;
-  if (interaction().type === "warning") {
+  const t = interaction().type;
+  if (t === "warning" || t === "resetWarning") {
     setInteractionRaw({ type: "none" });
   }
 };
@@ -59,4 +68,33 @@ export const triggerDelete = (minutes: number) => {
     deleteScheduleAt(minutes);
     setInteractionRaw({ type: "none" });
   }, delay);
+};
+
+/** りせっとボタン押下時に呼ぶ。全予定を warning 状態にして 3 秒の自動キャンセルタイマを仕込む。
+ *  予定が 0 件なら no-op (caller 側でも非表示にしている前提だが防御的に弾く)。 */
+export const enterResetWarning = () => {
+  if (Object.keys(schedule()).length === 0) return;
+  if (warningTimer) clearTimeout(warningTimer);
+  setInteractionRaw({ type: "resetWarning" });
+  warningTimer = setTimeout(() => {
+    if (interaction().type === "resetWarning") {
+      setInteractionRaw({ type: "none" });
+    }
+  }, WARNING_AUTO_CANCEL_MS);
+};
+
+/** いずれかの予定 (またはその ✕) をタップした時に呼ぶ。resetDeleting に遷移、最も遅い icon の poof
+ *  完了タイミングで全予定を一括削除して none に戻す。reduce-motion 中はアニメが走らないので
+ *  即座にデータを削除する。 */
+export const triggerResetDelete = () => {
+  if (warningTimer) clearTimeout(warningTimer);
+  warningTimer = undefined;
+  setInteractionRaw({ type: "resetDeleting" });
+  const eventCount = Object.keys(schedule()).length;
+  const maxStagger = motionAllowed() ? Math.max(0, eventCount - 1) * RESET_STAGGER_MS : 0;
+  const animDuration = motionAllowed() ? DELETE_ANIMATION_MS : 0;
+  setTimeout(() => {
+    deleteAllSchedule();
+    setInteractionRaw({ type: "none" });
+  }, maxStagger + animDuration);
 };

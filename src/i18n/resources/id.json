@@ -19,6 +19,7 @@
   },
   "schedule": {
     "add": "rencana",
+    "reset": "hapus",
     "icon": {
       "breakfast": "sarapan",
       "lunch": "makan siang",
