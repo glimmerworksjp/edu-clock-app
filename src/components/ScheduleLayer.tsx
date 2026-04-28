@@ -534,16 +534,18 @@ const EventIcon: Component<EventIconProps> = (props) => {
   };
 
   const onPointerDown = (e: PointerEvent) => {
-    // 回転モード中は icon を素通しさせて container 側に渡す
-    // (auto→manual 切替や drag を妨げないため)。長押し/タップ警告/タップ poyon も全部 skip。
-    if (rotateActive()) return;
-    e.stopPropagation();
     const i = interaction();
-    // りせっと警告中は任意のアイコンタップで全消し開始。
+    // りせっと警告中は icon タップで全消し (rotation かどうか問わず先に処理)。
     if (i.type === "resetWarning") {
+      e.stopPropagation();
       triggerResetDelete();
       return;
     }
+    // 回転モード中は icon を素通しさせて container 側に渡す
+    // (auto→manual 切替や drag を妨げないため)。長押し warning は container 側で検出して enter。
+    // タップ poyon は出さない (auto-rotate を妨げる)。
+    if (rotateActive()) return;
+    e.stopPropagation();
     // 別イベントが warning/deleting/resetDeleting 中は新規操作を受け付けない。
     if (i.type !== "none") return;
     longPressed = false;
@@ -580,7 +582,12 @@ const EventIcon: Component<EventIconProps> = (props) => {
   return (
     <Show when={def()}>
       <g
-        ref={groupRef}
+        ref={(el) => {
+          groupRef = el;
+          // 回転モード中の長押し warning 検出を container 側で行うためのマーカー
+          // (event.target.closest('[data-event-minutes]') で識別)。
+          el.setAttribute("data-event-minutes", String(props.event.minutes));
+        }}
         class="fade-on-dim"
         style={{
           // bbox 中心を transform 原点に → 回転/拡縮がアイコン中心まわりで起きる。

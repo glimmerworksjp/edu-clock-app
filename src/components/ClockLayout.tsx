@@ -25,6 +25,13 @@ import { useI18n } from "../i18n";
 import { dragStart, dragAdvance, type DragDragState } from "../features/free-rotation/drag";
 import { wheelAdvance } from "../features/free-rotation/wheel";
 import { resistTrigger, notifyResistance } from "../features/free-rotation/resistance";
+import { interaction, enterWarning } from "../features/schedule/interaction";
+
+/** 回転 manual 中の長押し warning 検出パラメータ。clock mode の EventIcon が持つ LONG_PRESS_MS と
+ *  揃える。 */
+const ROTATION_LONG_PRESS_MS = 500;
+/** 起点から MOVE_THRESHOLD_PX を超えたら drag とみなして warning は出さない。 */
+const ROTATION_LONG_PRESS_MOVE_THRESHOLD_PX = 8;
 
 type DragState = DragDragState;
 
@@ -100,6 +107,57 @@ export const ClockLayout: Component = () => {
     if (rafId === null) rafId = requestAnimationFrame(commitPending);
   };
 
+  /** 回転 manual 中、pointerdown が予定アイコン上で起きた時の長押し warning 検出 state。container が
+   *  pointer をキャプチャすると icon は pointerup を受け取れないので、icon でなく container 側で
+   *  タイマーと movement 判定を持つ。clock mode の長押し (EventIcon 内) とは独立した経路。 */
+  let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+  let longPressStartX = 0;
+  let longPressStartY = 0;
+  let longPressIconMinutes: number | null = null;
+
+  const findIconMinutesFromTarget = (target: EventTarget | null): number | null => {
+    if (!(target instanceof Element)) return null;
+    const node = target.closest("[data-event-minutes]");
+    if (!node) return null;
+    const v = node.getAttribute("data-event-minutes");
+    return v === null ? null : Number(v);
+  };
+
+  const startLongPressWarning = (e: PointerEvent) => {
+    cancelLongPressWarning();
+    if (interaction().type !== "none") return;
+    const minutes = findIconMinutesFromTarget(e.target);
+    if (minutes === null) return;
+    longPressStartX = e.clientX;
+    longPressStartY = e.clientY;
+    longPressIconMinutes = minutes;
+    longPressTimer = setTimeout(() => {
+      longPressTimer = undefined;
+      const m = longPressIconMinutes;
+      longPressIconMinutes = null;
+      if (m === null) return;
+      if (interaction().type !== "none") return;
+      enterWarning(m);
+    }, ROTATION_LONG_PRESS_MS);
+  };
+
+  const checkLongPressWarningMove = (e: PointerEvent) => {
+    if (!longPressTimer) return;
+    const dx = e.clientX - longPressStartX;
+    const dy = e.clientY - longPressStartY;
+    if (Math.hypot(dx, dy) > ROTATION_LONG_PRESS_MOVE_THRESHOLD_PX) {
+      cancelLongPressWarning();
+    }
+  };
+
+  const cancelLongPressWarning = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = undefined;
+    }
+    longPressIconMinutes = null;
+  };
+
   const onDragStart = (e: PointerEvent) => {
     if (!rotateActive()) return;
     // 自動回転中の背景タップは manual へ切替て停止 (左下「すとっぷ」と同等の操作)。
@@ -107,18 +165,23 @@ export const ClockLayout: Component = () => {
       setRotateMode("manual");
       return;
     }
+    // pointer が予定アイコン上で押された場合の長押し warning 検出を仕込む
+    // (drag と並行: 8px 動いたら drag 確定で warning は出さない、500ms 静止なら warning に入る)。
+    startLongPressWarning(e);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     dragRef = dragStart(e, rotateMinutes());
     setDragging(true);
   };
 
   const onDragMove = (e: PointerEvent) => {
+    checkLongPressWarningMove(e);
     const s = dragRef;
     if (!s || e.pointerId !== s.pointerId) return;
     schedule(dragAdvance(e, s));
   };
 
   const onDragEnd = (e: PointerEvent) => {
+    cancelLongPressWarning();
     const s = dragRef;
     if (!s || e.pointerId !== s.pointerId) return;
     const el = e.currentTarget as HTMLElement;
@@ -137,6 +200,7 @@ export const ClockLayout: Component = () => {
 
   onCleanup(() => {
     if (rafId !== null) cancelAnimationFrame(rafId);
+    cancelLongPressWarning();
   });
 
   let wheelTarget: number | null = null;
@@ -337,6 +401,10 @@ export const ClockLayout: Component = () => {
           opacity / transform は mergedRevealed 経由 (false→true 時に 1 frame 遅延 → fresh mount でも
           CSS transition が発火する。詳細は merge-animation.ts)。 */}
       <Show when={mergedVisible() || transitioning()}>
+        {/* pointer-events-none のままでも子 (icon 等) からの bubble は handler に届くので、merged β
+            内の icon ドラッグも auto→manual / drag に拾える。touch-action は icon 等の祖先を辿る
+            ので、ここに none を置かないと browser が touch を panning に取られる (containerRef は
+            別 subtree なので touch-action が継承されない)。 */}
         <div
           class={
             "clock-merged-container-transition absolute inset-0 flex items-center justify-center pointer-events-none " +
@@ -348,7 +416,12 @@ export const ClockLayout: Component = () => {
             "transform-origin": "center",
             filter: splitShadow(transitioning()),
             "will-change": transitioning() ? "transform, opacity" : "auto",
+            "touch-action": rotateActive() && rotateMode() === "manual" ? "none" : "auto",
           }}
+          onPointerDown={onDragStart}
+          onPointerMove={onDragMove}
+          onPointerUp={onDragEnd}
+          onPointerCancel={onDragEnd}
         >
           <div
             class={
