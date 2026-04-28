@@ -36,7 +36,7 @@ const SettingsPanel: Component = () => {
    *  whitespace-nowrap は left+translate で右端寄せするボタン (1ふんもどす) が shrink-to-fit で
    *  CJK 縦書きになるのを防ぐため。 */
   const btnClass =
-    "px-2.5 py-1 tablet:px-6 tablet:py-4 rounded-full text-base tablet:text-xl font-bold shadow-md active:scale-90 transition-all bg-white/80 backdrop-blur-sm text-gray-700 whitespace-nowrap";
+    "px-2.5 py-1 tablet:px-6 tablet:py-4 rounded-full text-base tablet:text-xl font-bold shadow-md active:scale-90 transition-all bg-white/80 text-gray-700 whitespace-nowrap";
 
   return (
     <>
