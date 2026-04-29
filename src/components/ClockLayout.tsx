@@ -20,6 +20,7 @@ import {
   splitShadow,
 } from "../features/free-rotation/merge-animation";
 import { useAmPmPreviewHold } from "../features/debug/am-pm-preview-lock";
+import { computeVisibleMinutes, useReleaseSnap } from "../features/free-rotation/release-snap";
 import { MORPHING_SLOT } from "../features/view-transition";
 import { useI18n } from "../i18n";
 import { dragStart, dragAdvance, type DragDragState } from "../features/free-rotation/drag";
@@ -55,10 +56,17 @@ export const ClockLayout: Component = () => {
   const isLandscape = useOrientation();
   const { t } = useI18n();
 
+  /** drag / autoRotate 中は rotateMinutes が連続的に動く状態。release-snap の snap 抑制と
+   *  display の float-vs-ceil 切替に使う。 */
+  const [dragging, setDragging] = createSignal(false);
+  const moving = createMemo(() => dragging() || clockMode() === "autoRotate");
+
   const displayed = createMemo(() => {
     if (isRotating()) {
       const m = rotateMinutes();
-      return { hours: Math.floor(m / 60), minutes: m % 60, seconds: 0 };
+      const v = computeVisibleMinutes(m, moving());
+      const wrapped = ((v % 1440) + 1440) % 1440;
+      return { hours: Math.floor(wrapped / 60), minutes: wrapped % 60, seconds: 0 };
     }
     return time();
   });
@@ -83,6 +91,14 @@ export const ClockLayout: Component = () => {
     setMinuteTickKey(k => k + 1);
   }));
 
+  /** drag 終了 / autoRotate 停止時に rotateMinutes の小数部を整数分に収束させる。
+   *  逆回転禁止のため、frac < 0.5 では snap せず float のまま、frac ≥ 0.5 では ceil で前方に揃える。
+   *  詳細は release-snap.ts。 */
+  const { flushPendingCommit } = useReleaseSnap({
+    moving,
+    fireMotion: () => setMinuteTickKey(k => k + 1),
+  });
+
   const actualIsAm = createMemo(() => displayed().hours < 12);
   const { isAm, startHold, clearHold } = useAmPmPreviewHold(actualIsAm);
   /** AM/PM プレビュー長押しで反対側を表示している間 true。.selection-dim-instant 経由で
@@ -104,7 +120,6 @@ export const ClockLayout: Component = () => {
   let pmWrapperRef: HTMLDivElement | undefined;
   /** 高頻度 pointermove で書き換わるため signal にせず直接 mutate して allocation を抑える。 */
   let dragRef: DragState | null = null;
-  const [dragging, setDragging] = createSignal(false);
   let pendingMinutes: number | null = null;
   let rafId: number | null = null;
 
@@ -179,6 +194,10 @@ export const ClockLayout: Component = () => {
       transition("freeRotate");
       return;
     }
+    // 直前 release で release-snap の commit が pending だった場合は先に flush。これを
+    // やらないと dragStart が float の startMinutes を capture してしまい、commit が後から
+    // 書き戻されて drag 中に逆回転が混じる。
+    flushPendingCommit();
     // pointer が予定アイコン上で押された場合の長押し warning 検出を仕込む
     // (drag と並行: 8px 動いたら drag 確定で warning は出さない、500ms 静止なら warning に入る)。
     startLongPressWarning(e);
