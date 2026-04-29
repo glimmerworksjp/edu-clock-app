@@ -1,11 +1,13 @@
 import { createEffect, onCleanup } from "solid-js";
 import { clockMode, transition } from "./state";
-import { pickerOpen } from "../schedule/picker";
+import { pickerOpen, closePicker } from "../schedule/picker";
 
 /**
  * freeRotate モードに入った後、IDLE_EXIT_MS ユーザー操作が無ければ transition("clock") で clock モードに戻す。
+ * picker (リングメニュー) 開いてる間も同じ timer が走り続け、idle 経過で picker を閉じてから clock へ遷移する
+ * (picker 開きっぱなしで放置 → 永久に rotation モード居残り、を防ぐ)。
  *
- * 戻さないケース: clockMode !== "freeRotate" (対象外) / pickerOpen=true (操作中扱い)。
+ * 戻さないケース: clockMode !== "freeRotate" (対象外)。
  * 「操作」は pointermove / touchmove も含めて広めに watch するので drag や hover 中の誤検知は無い。
  */
 
@@ -34,14 +36,15 @@ export const useIdleExitTimer = () => {
     }
   };
 
-  const shouldRun = () =>
-    clockMode() === "freeRotate" && !pickerOpen();
+  const shouldRun = () => clockMode() === "freeRotate";
 
   const armTimer = () => {
     clearTimer();
     timerId = setTimeout(() => {
-      // fire 時に再 check (60 秒の間に状態が変わっている可能性があるので shouldRun と同じ条件で gate)。
-      if (shouldRun()) transition("clock");
+      // fire 時に再 check (60 秒の間に mode が変わっている可能性があるので gate)。
+      if (clockMode() !== "freeRotate") return;
+      if (pickerOpen()) closePicker();
+      transition("clock");
     }, IDLE_EXIT_MS);
   };
 
