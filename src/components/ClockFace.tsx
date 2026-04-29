@@ -58,7 +58,8 @@ const PULSE_SCALE_KEYFRAMES: Keyframe[] = [
   { transform: "scale(1)",    offset: 1 },
 ];
 
-/** 時間の数字 font-size。ばっじ×すっきり×ものとーんだけバッジの円が白で消えるので数字を少し大きく。 */
+/** 時間の数字 font-size。ばっじ×すっきり×ものとーんだけバッジの円が白で消えるので数字を少し大きく。
+ *  ばっじモードでも すっきり/くわしく で差別化 (くぎりモードと同じ流儀)。 */
 const numberFontSize = (
   colorModeValue: "sector" | "badge",
   paletteIdValue: string,
@@ -67,11 +68,16 @@ const numberFontSize = (
 ): string => {
   if (colorModeValue === "badge") {
     if (paletteIdValue === "monotone" && !kuwashiku) return num >= 10 ? "24" : "30";
+    if (!kuwashiku) return num >= 10 ? "22" : "28";
     return num >= 10 ? "18" : "24";
   }
   if (kuwashiku) return num >= 10 ? "24" : "28";
   return num >= 10 ? "32" : "36";
 };
+
+/** ばっじ円の半径。すっきりで一回り大きく (数字 font-size と一緒にスケールさせる)。 */
+const BADGE_R_KUWASHIKU = 18;
+const BADGE_R_SUKKIRI = 22;
 
 /** 値が変わった瞬間にバウンスさせる effect。実質 PM 盤面のみ発火 (AM/merged は num 不変で no-op)。
  *  連打時に前のバウンスが残らないよう cancel してから start する。 */
@@ -165,7 +171,8 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
   const CY = VIEW / 2;
   /** くわしくは時計を縮めて外に分数字スペースを確保、すっきりは画面いっぱい。 */
   const R = () => isKuwashiku() ? 130 : 148;
-  const NUM_R = () => R() - 18;
+  /** ばっじ×すっきりは badge 半径が 22 に膨らむので、外周はみ出し回避で内側へ 4 引き込む。 */
+  const NUM_R = () => R() - (colorMode() === "badge" && !isKuwashiku() ? BADGE_R_SUKKIRI : 18);
   const BAND_INNER = () => NUM_R() - 16;
   const BAND_OUTER = () => R();
   const OUTER_RING = () => R() + 3;
@@ -343,7 +350,7 @@ const ClockFace: Component<ClockFaceProps> = (props) => {
                 }}
               >
                 <Show when={colorMode() === "badge"}>
-                  <circle cx={x()} cy={y()} r={18} fill={color()!.badge} />
+                  <circle cx={x()} cy={y()} r={isKuwashiku() ? BADGE_R_KUWASHIKU : BADGE_R_SUKKIRI} fill={color()!.badge} />
                 </Show>
                 <text
                   ref={textRef}
