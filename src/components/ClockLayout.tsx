@@ -349,8 +349,9 @@ export const ClockLayout: Component = () => {
             <DimOverlay opacity={amSelectionOpacity()}>
               <ClockFace period="am" hours={amTime().hours} />
             </DimOverlay>
-            {/* ScheduleLayer は dim 階層の外。merge transition 中は外す (620ms 重い合成回避) */}
-            <Show when={!transitioning()}>
+            {/* ScheduleLayer は dim 階層の外。merge transition 中 / autoRotate 中は外す
+                (620ms 合成負荷 / autoRotate の高速回転による合成負荷を回避)。 */}
+            <Show when={!transitioning() && clockMode() !== "autoRotate"}>
               <ScheduleLayer
                 period="am"
                 dimmed={!isAm()}
@@ -382,7 +383,7 @@ export const ClockLayout: Component = () => {
             <DimOverlay opacity={pmSelectionOpacity()}>
               <ClockFace period="pm" hours={pmTime().hours} />
             </DimOverlay>
-            <Show when={!transitioning()}>
+            <Show when={!transitioning() && clockMode() !== "autoRotate"}>
               <ScheduleLayer
                 period="pm"
                 dimmed={isAm()}
@@ -432,8 +433,8 @@ export const ClockLayout: Component = () => {
             <ClockFace period="merged" hours={displayed().hours} />
             {/* 重ね表示: 現在 period を前 + 不透明、反対側を dimOpacity=0.15 で後ろに重ねる。
                 z-index は使わない (正の z は z-auto の HandsLayer を覆う)。
-                merge transition 中は二重描画コスト回避で外す。 */}
-            <Show when={!transitioning()}>
+                merge transition 中 / autoRotate 中は二重描画コスト回避で外す。 */}
+            <Show when={!transitioning() && clockMode() !== "autoRotate"}>
               <Show
                 when={displayed().hours < 12}
                 fallback={<>
