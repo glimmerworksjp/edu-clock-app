@@ -18,7 +18,7 @@
     "random": "sorteio"
   },
   "schedule": {
-    "add": "plano",
+    "add": "Momentos",
     "reset": "limpar",
     "icon": {
       "breakfast": "café",

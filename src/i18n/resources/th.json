@@ -18,7 +18,7 @@
     "random": "สุ่ม"
   },
   "schedule": {
-    "add": "แผน",
+    "add": "ช่วงเวลา",
     "reset": "ล้าง",
     "icon": {
       "breakfast": "อาหารเช้า",
