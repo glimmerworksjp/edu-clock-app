@@ -1,6 +1,8 @@
-import { createSignal } from "solid-js";
+import { createSignal, createEffect, createRoot, on } from "solid-js";
 import { deleteScheduleAt, deleteAllSchedule, schedule } from "./state";
 import { motionAllowed } from "../../lib/motion";
+import { clockMode } from "../free-rotation/state";
+import { pickerOpen } from "./picker";
 
 /**
  * 予定アイコンの削除 UX 状態。
@@ -98,3 +100,20 @@ export const triggerResetDelete = () => {
     setInteractionRaw({ type: "none" });
   }, maxStagger + animDuration);
 };
+
+/**
+ * warning / resetWarning は freeRotate モード + picker 閉鎖の文脈でしか意味を持たない。
+ * 状態がそこを抜けたら強制 none に戻して、stale な ✕ ボタン残留を防ぐ。
+ *
+ * これがないと「resetWarning 中に よていボタンで picker open → 背景に ✕ 残留」「clock モードに
+ * 戻る → 本来出ないはずの ✕ が数秒残留」の不具合が起きる。各 caller に cancelWarning を呼ばせる
+ * 設計だと忘れた経路で stale state が漏れるので、生存条件をモジュール 1 箇所で宣言してしまう。
+ */
+createRoot(() => {
+  createEffect(on(clockMode, (m) => {
+    if (m !== "freeRotate") cancelWarning();
+  }, { defer: true }));
+  createEffect(on(pickerOpen, (open) => {
+    if (open) cancelWarning();
+  }, { defer: true }));
+});
