@@ -79,9 +79,9 @@ const HandsLayer: Component<HandsLayerProps> = (props) => {
             transform={`rotate(${minuteAngle() + 90} ${CENTER} ${CENTER})`}
             style="will-change: transform"
           >
-            <line x1={CENTER} y1={CENTER + 13} x2={CENTER} y2={CENTER - R() * 0.76}
+            <line x1={CENTER} y1={CENTER + 13} x2={CENTER} y2={CENTER - R() * 0.78}
               stroke="#ffffff" stroke-width="6" stroke-linecap="round" />
-            <line x1={CENTER} y1={CENTER + 13} x2={CENTER} y2={CENTER - R() * 0.76}
+            <line x1={CENTER} y1={CENTER + 13} x2={CENTER} y2={CENTER - R() * 0.78}
               stroke="#111111" stroke-width="3.5" stroke-linecap="round" />
           </g>
         </g>
